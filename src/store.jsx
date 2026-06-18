@@ -9,6 +9,7 @@ const defaultState = {
     customer: '',
     offer: '',
     win90: '',
+    focus: '', // "Today's One Thing"
   },
   goals: [],
   ideas: [],
@@ -55,6 +56,7 @@ function reducer(state, action) {
             win: action.win || '',
             status: action.status || 'on',
             due: action.due || '',
+            domain: action.domain || 'growth',
             createdAt: Date.now(),
           },
           ...state.goals,
@@ -130,4 +132,21 @@ export const STATUS_META = {
   risk: { label: 'At Risk', dot: 'status-risk', color: 'var(--yellow)' },
   off: { label: 'Off Track', dot: 'status-off', color: 'var(--orange)' },
   overdue: { label: 'Overdue', dot: 'status-overdue', color: 'var(--red)' },
+}
+
+// Business domains shown on the Home "Domain Health" board.
+export const DOMAINS = [
+  { id: 'growth', label: 'Growth', icon: 'trending-up' },
+  { id: 'finance', label: 'Finance', icon: 'gem' },
+  { id: 'operations', label: 'Operations', icon: 'hexagon' },
+]
+
+const STATUS_SEVERITY = { on: 0, risk: 1, off: 2, overdue: 3 }
+const SEVERITY_STATUS = ['on', 'risk', 'off', 'overdue']
+
+// Roll a domain's goals up into a single health status (worst wins).
+export function domainHealth(goals) {
+  if (!goals.length) return { status: 'on', empty: true }
+  const worst = goals.reduce((m, g) => Math.max(m, STATUS_SEVERITY[g.status] ?? 0), 0)
+  return { status: SEVERITY_STATUS[worst], empty: false }
 }

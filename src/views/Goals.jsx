@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Plus, Target, Trash2, X, Check } from 'lucide-react'
 import Header from '../components/Header'
-import { useStore, STATUS_META } from '../store'
+import { useStore, STATUS_META, DOMAINS } from '../store'
 
 const STATUS_ORDER = ['on', 'risk', 'off', 'overdue']
 
@@ -95,13 +95,14 @@ function GoalEditor({ goal, onClose, dispatch }) {
   const [win, setWin] = useState(goal?.win || '')
   const [status, setStatus] = useState(goal?.status || 'on')
   const [due, setDue] = useState(goal?.due || '')
+  const [domain, setDomain] = useState(goal?.domain || 'growth')
 
   function save() {
     if (!title.trim()) return
     if (goal) {
-      dispatch({ type: 'UPDATE_GOAL', id: goal.id, patch: { title: title.trim(), win, status, due } })
+      dispatch({ type: 'UPDATE_GOAL', id: goal.id, patch: { title: title.trim(), win, status, due, domain } })
     } else {
-      dispatch({ type: 'ADD_GOAL', title: title.trim(), win, status, due })
+      dispatch({ type: 'ADD_GOAL', title: title.trim(), win, status, due, domain })
     }
     onClose()
   }
@@ -129,6 +130,29 @@ function GoalEditor({ goal, onClose, dispatch }) {
           autoFocus
           onChange={(e) => setTitle(e.target.value)}
         />
+
+        <label className="label" style={{ marginTop: 14 }}>
+          Domain
+        </label>
+        <div className="row wrap" style={{ gap: 8 }}>
+          {DOMAINS.map((d) => {
+            const active = domain === d.id
+            return (
+              <button
+                key={d.id}
+                className="chip"
+                onClick={() => setDomain(d.id)}
+                style={{
+                  color: active ? 'var(--gold-bright)' : 'var(--text-dim)',
+                  borderColor: active ? 'var(--gold)' : 'var(--border)',
+                  background: active ? 'var(--surface-strong)' : 'transparent',
+                }}
+              >
+                {d.label}
+              </button>
+            )
+          })}
+        </div>
 
         <label className="label" style={{ marginTop: 14 }}>
           What does a WIN look like?
