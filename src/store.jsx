@@ -3,25 +3,15 @@ import { uid } from './lib/id'
 
 const STORAGE_KEY = 'cortex.state.v1'
 
-// Seed goals so a fresh install shows a populated, demo-ready Home.
-const seedGoals = [
-  { title: 'Grow to 50 paying customers', domain: 'growth', status: 'on', win: '50 active customers' },
-  { title: 'Launch the premium tier', domain: 'growth', status: 'on', win: 'Premium plan live' },
-  { title: 'Finalise the Q3 cost review', domain: 'finance', status: 'risk', win: 'Costs cut 15%' },
-  { title: 'Reach $30k monthly revenue', domain: 'finance', status: 'on', win: '$30k MRR' },
-  { title: 'Hire a part-time assistant', domain: 'operations', status: 'off', win: 'VA onboarded' },
-  { title: 'Document core SOPs', domain: 'operations', status: 'on', win: 'Playbook done' },
-].map((g) => ({ id: uid(), due: '', createdAt: Date.now(), ...g }))
-
 const defaultState = {
   profile: {
     business: '',
     customer: '',
     offer: '',
     win90: '',
-    focus: 'Finalise the Q3 cost review with your supplier', // "Today's One Thing"
+    focus: '', // "Today's One Thing"
   },
-  goals: seedGoals,
+  goals: [],
   ideas: [],
   pulses: [],
   settings: {
