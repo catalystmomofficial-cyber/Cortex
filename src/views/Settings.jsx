@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { ArrowLeft, Check, Mic, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
-import { GEMINI_MODELS } from '../lib/gemini'
 
 export default function Settings({ onNavigate }) {
   const { state, dispatch } = useStore()
@@ -66,45 +65,6 @@ export default function Settings({ onNavigate }) {
           onChange={(v) => setProfile({ win90: v })}
           placeholder="e.g. 25 retainer clients"
         />
-      </div>
-
-      {/* AI */}
-      <div className="section-title">
-        <h2>AI Advisor (Google Gemini)</h2>
-      </div>
-      <div className="card stack">
-        <div>
-          <label className="label">Model</label>
-          <select
-            className="input"
-            value={state.settings.geminiModel}
-            onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', patch: { geminiModel: e.target.value } })}
-          >
-            {GEMINI_MODELS.map((m) => (
-              <option key={m.id} value={m.id} style={{ background: '#1c160d' }}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="faint" style={{ fontSize: 12 }}>
-          Your advisor runs on Google Gemini, connected securely on the server — nothing to set up here.
-        </p>
-      </div>
-
-      {/* Voice */}
-      <div className="section-title">
-        <h2>Voice</h2>
-      </div>
-      <div className="card">
-        <div className="row" style={{ marginBottom: 8 }}>
-          <Mic size={18} color="var(--amber)" />
-          <strong style={{ fontSize: 15 }}>Speechmatics transcription</strong>
-        </div>
-        <p className="faint" style={{ fontSize: 13 }}>
-          Voice Mode uses Speechmatics for accurate, real-time transcription. The API key lives
-          securely on the server (never in this app), so there's nothing to configure here.
-        </p>
       </div>
 
       <button className="btn btn-primary btn-block" style={{ marginTop: 22 }} onClick={flashSaved}>

@@ -1,8 +1,8 @@
 :root {
-  /* Core palette — luxury near-black with champagne gold */
-  --bg: #08070a;
-  --bg-elev: #100e12;
-  --bg-elev-2: #16131a;
+  /* Core palette — original warm near-black with champagne gold */
+  --bg: #0a0805;
+  --bg-elev: #141009;
+  --bg-elev-2: #1c160d;
   --surface: rgba(255, 255, 255, 0.035);
   --surface-strong: rgba(255, 255, 255, 0.06);
   --border: rgba(212, 175, 90, 0.12);
@@ -333,9 +333,9 @@ textarea {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  background: rgba(8, 7, 10, 0.86);
+  background: rgba(10, 8, 5, 0.92);
   backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-strong);
 }
 
 .nav-item {
@@ -345,8 +345,8 @@ textarea {
   align-items: center;
   gap: 5px;
   padding: 4px 0;
-  color: var(--text-faint);
-  font-size: 10px;
+  color: var(--text-dim);
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -360,8 +360,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  color: var(--text-faint);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
   transition: all 0.2s ease;
 }
 
