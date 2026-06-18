@@ -10,6 +10,7 @@ const defaultState = {
     offer: '',
     win90: '',
     focus: '', // "Today's One Thing"
+    company: '', // shown in Voice Mode
   },
   goals: [],
   ideas: [],

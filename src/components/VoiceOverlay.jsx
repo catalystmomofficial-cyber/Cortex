@@ -9,8 +9,6 @@ import { speak, cancelSpeech } from '../lib/speech'
 import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
-const ORG = 'CATALYST MDM'
-
 const SUGGESTIONS = [
   'What should I focus on today?',
   'My finance goal is at risk',
@@ -22,15 +20,16 @@ const SUGGESTIONS = [
 // reacting throughout (like ChatGPT / Gemini voice mode).
 export default function VoiceOverlay({ onClose }) {
   const { state } = useStore()
+  const org = (state.profile.company || '').trim() || 'Cortex'
   const recorder = usePCMAudioRecorderContext()
   const sm = useSpeechmatics()
 
-  const [mode, setMode] = useState('listening') // listening | thinking | speaking | idle
+  const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
 
   const levelRef = useRef(0)
-  const modeRef = useRef('listening')
+  const modeRef = useRef('idle')
   const speakBumpRef = useRef(0)
   const transcriptRef = useRef('')
   const historyRef = useRef([])
@@ -43,10 +42,8 @@ export default function VoiceOverlay({ onClose }) {
     transcriptRef.current = sm.transcript
   }, [sm.transcript])
 
-  // Open → start listening immediately. Tear everything down on close.
+  // Tear everything down on close.
   useEffect(() => {
-    sm.start()
-    setMode('listening')
     return () => {
       sm.stop()
       cancelSpeech()
@@ -89,7 +86,8 @@ export default function VoiceOverlay({ onClose }) {
     return () => cancelAnimationFrame(raf)
   }, [recorder])
 
-  function restartListening() {
+  function startListening() {
+    cancelSpeech()
     sm.reset()
     sm.start()
     setMode('listening')
@@ -112,7 +110,6 @@ export default function VoiceOverlay({ onClose }) {
     let acc = ''
     try {
       await streamChat({
-        model: state.settings.geminiModel,
         system: buildSystemPrompt(state),
         messages: msgs,
         signal: controller.signal,
@@ -128,7 +125,8 @@ export default function VoiceOverlay({ onClose }) {
           speakBumpRef.current = Math.min(0.5, speakBumpRef.current + 0.18)
         },
         onEnd: () => {
-          if (modeRef.current === 'speaking') restartListening()
+          // AI finished talking → return to rest; suggestions slide back in.
+          if (modeRef.current === 'speaking') setMode('idle')
         },
       })
     } catch (e) {
@@ -147,8 +145,9 @@ export default function VoiceOverlay({ onClose }) {
     const m = modeRef.current
     if (m === 'thinking') return
     if (m === 'speaking') {
+      // Interrupt the advisor and start listening again.
       cancelSpeech()
-      restartListening()
+      startListening()
       return
     }
     if (m === 'listening') {
@@ -160,7 +159,7 @@ export default function VoiceOverlay({ onClose }) {
       }
       return
     }
-    restartListening() // idle
+    startListening() // idle → begin talking
   }
 
   const label =
@@ -174,8 +173,8 @@ export default function VoiceOverlay({ onClose }) {
             ? 'Speaking…'
             : 'Tap to speak'
 
-  const showAnswer = (mode === 'thinking' || mode === 'speaking') && (answer || mode === 'thinking')
-  const showPrompts = mode === 'listening' || mode === 'idle'
+  const inConversation = mode === 'thinking' || mode === 'speaking'
+  const showPrompts = mode === 'idle' // suggestions only at rest
 
   return (
     <div className="voice-overlay">
@@ -183,7 +182,7 @@ export default function VoiceOverlay({ onClose }) {
         <div>
           <div className="title">Voice Mode</div>
           <div className="org">
-            <span className="dot" /> {ORG}
+            <span className="dot" /> {org}
           </div>
         </div>
         <button className="voice-close" aria-label="Close" onClick={onClose}>
@@ -203,33 +202,28 @@ export default function VoiceOverlay({ onClose }) {
           </button>
         </div>
 
-        {showAnswer ? (
-          <div className="voice-answer">{answer || '…'}</div>
-        ) : (
-          <>
-            {sm.transcript ? (
-              <div className="voice-transcript">
-                {sm.finalText && <span>{sm.finalText} </span>}
-                {sm.partialText && <span className="partial">{sm.partialText}</span>}
-              </div>
-            ) : (
-              <div className="voice-trylabel">Try saying</div>
-            )}
-          </>
-        )}
+        <div className="voice-stage-text">
+          {inConversation ? (
+            <div className="voice-answer">{answer || '…'}</div>
+          ) : mode === 'listening' && sm.transcript ? (
+            <div className="voice-transcript">
+              {sm.finalText && <span>{sm.finalText} </span>}
+              {sm.partialText && <span className="partial">{sm.partialText}</span>}
+            </div>
+          ) : null}
+        </div>
 
         {error && <div className="voice-error">{error}</div>}
       </div>
 
-      {showPrompts && (
-        <div className="voice-suggestions">
-          {SUGGESTIONS.map((s) => (
-            <button key={s} className="gold-pill" onClick={() => ask(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={`voice-suggestions ${showPrompts ? '' : 'hidden'}`}>
+        <div className="voice-trylabel">Try saying</div>
+        {SUGGESTIONS.map((s) => (
+          <button key={s} className="gold-pill" onClick={() => ask(s)} tabIndex={showPrompts ? 0 : -1}>
+            {s}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

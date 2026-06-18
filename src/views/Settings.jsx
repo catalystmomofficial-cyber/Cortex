@@ -42,6 +42,12 @@ export default function Settings({ onNavigate }) {
       </div>
       <div className="card stack">
         <Field
+          label="Company name"
+          value={state.profile.company}
+          onChange={(v) => setProfile({ company: v })}
+          placeholder="e.g. Catalyst MDM"
+        />
+        <Field
           label="What do you sell or offer?"
           value={state.profile.business}
           onChange={(v) => setProfile({ business: v })}

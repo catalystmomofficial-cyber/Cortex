@@ -13,7 +13,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server.' })
   }
 
-  const { model = 'gemini-2.0-flash', system, messages = [] } = req.body || {}
+  // Pin the model server-side to the higher-free-tier Flash model for
+  // reliability (the 2.5 model rate-limits much sooner on the free plan).
+  const model = 'gemini-2.0-flash'
+  const { system, messages = [] } = req.body || {}
 
   const contents = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
