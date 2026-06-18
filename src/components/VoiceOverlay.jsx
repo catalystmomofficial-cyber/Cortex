@@ -1,12 +1,16 @@
 import { useEffect } from 'react'
-import { X, Mic, Square, MessageSquare, Lightbulb, RotateCcw } from 'lucide-react'
+import { X, MessageSquare, Lightbulb, RotateCcw } from 'lucide-react'
 import { useSpeechmatics } from '../hooks/useSpeechmatics'
+import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
-const TRY_SAYING = [
-  'My finance goal is at risk',
-  'Add a goal: 50 new customers',
+const ORG = 'CATALYST MDM'
+
+const SUGGESTIONS = [
   'What should I focus on today?',
+  'My finance goal is at risk',
+  'Add a new growth goal',
+  "What's my biggest challenge?",
 ]
 
 export default function VoiceOverlay({ onClose, onComplete }) {
@@ -21,12 +25,15 @@ export default function VoiceOverlay({ onClose, onComplete }) {
   }, [])
 
   const hasText = transcript.trim().length > 0
-  const connecting = status === 'connecting'
 
-  function toggleMic() {
-    if (isListening) stop()
-    else start()
-  }
+  const stateLabel =
+    status === 'connecting'
+      ? 'Connecting…'
+      : isListening
+        ? 'Listening…'
+        : hasText
+          ? 'Tap orb to redo'
+          : 'Tap to speak'
 
   function sendTo(destination) {
     stop()
@@ -36,86 +43,84 @@ export default function VoiceOverlay({ onClose, onComplete }) {
   return (
     <div className="voice-overlay">
       <div className="voice-top">
-        <span className="voice-title">Voice Mode</span>
-        <button className="btn-icon" aria-label="Close" onClick={onClose}>
-          <X size={20} />
+        <div>
+          <div className="title">Voice Mode</div>
+          <div className="org">
+            <span className="dot" /> {ORG}
+          </div>
+        </div>
+        <button className="voice-close" aria-label="Close" onClick={onClose}>
+          <X size={22} />
         </button>
       </div>
 
       <div className="voice-center">
-        <div className="orb-wrap">
+        <div className="voice-state">{stateLabel}</div>
+
+        <div className={`orb-stage ${isListening ? 'listening' : ''}`}>
+          <span className="orb-ring r1" />
+          <span className="orb-ring r2" />
+          <span className="orb-ring r3" />
           <button
-            className={`orb ${isListening ? 'listening' : 'idle'}`}
-            onClick={toggleMic}
+            onClick={() => (isListening ? stop() : start())}
             aria-label={isListening ? 'Stop listening' : 'Start listening'}
+            style={{ background: 'none', display: 'flex' }}
           >
-            <span className="orb-ring r1" />
-            <span className="orb-ring r2" />
-            <span className="orb-ring r3" />
-            {isListening ? <Square size={34} fill="#2a1700" /> : <Mic size={40} strokeWidth={2.2} />}
+            <VoiceOrb active={isListening} size={260} />
           </button>
         </div>
 
-        <div className="voice-hint">
-          {connecting
-            ? 'Connecting…'
-            : isListening
-              ? 'Listening… tap the orb to stop'
-              : hasText
-                ? 'Tap the orb to record again'
-                : 'Tap the orb to speak'}
-        </div>
-
-        <div className={`voice-transcript ${hasText ? '' : 'empty'}`}>
-          {hasText ? (
-            <>
-              {finalText && <span>{finalText} </span>}
-              {partialText && <span className="partial">{partialText}</span>}
-            </>
-          ) : (
-            'Your words will appear here.'
-          )}
-        </div>
+        {hasText ? (
+          <div className="voice-transcript">
+            {finalText && <span>{finalText} </span>}
+            {partialText && <span className="partial">{partialText}</span>}
+          </div>
+        ) : (
+          <div className="voice-trylabel">Try saying</div>
+        )}
 
         {error && <div className="voice-error">{error}</div>}
+      </div>
 
-        {!hasText && !error && !isListening && (
+      {hasText ? (
+        <div className="voice-actions">
+          <div className="voice-dest-row">
+            <button className="btn btn-ghost" onClick={() => sendTo('capture')}>
+              <Lightbulb size={18} /> Save as Idea
+            </button>
+            <button className="btn btn-primary" onClick={() => sendTo('advisor')}>
+              <MessageSquare size={18} /> Ask Advisor
+            </button>
+          </div>
+          <button
+            className="btn btn-ghost btn-block"
+            onClick={() => {
+              reset()
+              start()
+            }}
+          >
+            <RotateCcw size={16} /> Start over
+          </button>
+        </div>
+      ) : (
+        <>
           <div className="voice-suggestions">
-            <div className="faint" style={{ width: '100%', textAlign: 'center', fontSize: 12 }}>
-              Try saying
-            </div>
-            {TRY_SAYING.map((s) => (
-              <span className="chip" key={s}>
-                “{s}”
-              </span>
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                className="gold-pill"
+                onClick={() => {
+                  stop()
+                  onComplete(s, 'advisor')
+                }}
+              >
+                {s}
+              </button>
             ))}
           </div>
-        )}
-      </div>
-
-      <div className="voice-actions">
-        {hasText && (
-          <>
-            <div className="voice-dest-row">
-              <button className="btn btn-ghost" onClick={() => sendTo('capture')}>
-                <Lightbulb size={18} /> Save as Idea
-              </button>
-              <button className="btn btn-primary" onClick={() => sendTo('advisor')}>
-                <MessageSquare size={18} /> Ask Advisor
-              </button>
-            </div>
-            <button
-              className="btn btn-ghost btn-block"
-              onClick={() => {
-                reset()
-                start()
-              }}
-            >
-              <RotateCcw size={16} /> Start over
-            </button>
-          </>
-        )}
-      </div>
+          <div className="voice-footer">Powered by Speechmatics</div>
+        </>
+      )}
     </div>
   )
 }
