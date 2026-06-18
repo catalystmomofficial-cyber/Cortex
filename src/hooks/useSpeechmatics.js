@@ -5,7 +5,7 @@ import {
   usePCMAudioListener,
 } from '@speechmatics/browser-audio-input-react'
 
-const SAMPLE_RATE = 16000
+const FALLBACK_SAMPLE_RATE = 16000
 const TOKEN_ENDPOINT = '/api/speechmatics-token'
 
 /**
@@ -113,9 +113,13 @@ export function useSpeechmatics() {
       }
     })
 
+    // Use the actual capture rate (iOS records at the hardware rate, e.g.
+    // 48 kHz, regardless of any requested rate) so the declared rate matches.
+    const sampleRate = Math.round(recorder.audioContext?.sampleRate || FALLBACK_SAMPLE_RATE)
+
     try {
       await client.start(token, {
-        audio_format: { type: 'raw', encoding: 'pcm_f32le', sample_rate: SAMPLE_RATE },
+        audio_format: { type: 'raw', encoding: 'pcm_f32le', sample_rate: sampleRate },
         transcription_config: {
           language: 'en',
           enable_partials: true,
@@ -150,5 +154,3 @@ export function useSpeechmatics() {
     reset,
   }
 }
-
-export const VOICE_SAMPLE_RATE = SAMPLE_RATE

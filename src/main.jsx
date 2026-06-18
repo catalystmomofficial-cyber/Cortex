@@ -3,16 +3,16 @@ import { createRoot } from 'react-dom/client'
 import { PCMAudioRecorderProvider } from '@speechmatics/browser-audio-input-react'
 import workletScriptURL from '@speechmatics/browser-audio-input/pcm-audio-worklet.min.js?url'
 import { StoreProvider } from './store'
-import { VOICE_SAMPLE_RATE } from './hooks/useSpeechmatics'
 import App from './App'
 import './index.css'
 
-// One shared AudioContext at the rate Speechmatics expects. It starts
-// suspended and is resumed by the recorder on the user's first tap.
+// One shared AudioContext using the device's native sample rate. We do NOT
+// force a rate: iOS Safari ignores a requested rate and records at the hardware
+// rate (often 48 kHz), which would then mismatch what we tell Speechmatics. The
+// recorder captures at this context's actual rate, and useSpeechmatics reads it
+// back so the declared rate always matches the audio we send.
 const audioContext =
-  typeof window !== 'undefined' && window.AudioContext
-    ? new AudioContext({ sampleRate: VOICE_SAMPLE_RATE })
-    : undefined
+  typeof window !== 'undefined' && window.AudioContext ? new AudioContext() : undefined
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
