@@ -135,7 +135,7 @@ export default function VoiceOverlay({ onClose }) {
       if (e.name !== 'AbortError') {
         setError(
           e.message === 'NO_SERVER_KEY'
-            ? "AI isn't connected yet — add GEMINI_API_KEY on the server."
+            ? "AI isn't connected yet. Please try again shortly."
             : 'Something went wrong. Tap the orb to try again.'
         )
       }

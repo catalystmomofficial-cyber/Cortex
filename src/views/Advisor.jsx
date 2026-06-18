@@ -74,7 +74,7 @@ export default function Advisor({ onVoice }) {
       } else {
         setError(
           e.message === 'NO_SERVER_KEY'
-            ? "AI isn't connected yet — add GEMINI_API_KEY on the server."
+            ? "AI isn't connected yet. Please try again shortly."
             : 'Something went wrong. Please try again.'
         )
         dispatch({ type: 'SET_ADVISOR_MESSAGES', messages })
