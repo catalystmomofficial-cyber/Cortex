@@ -2,6 +2,11 @@
 // server-side GEMINI_API_KEY. The browser never sees the key — so there is no
 // key field or "connect your AI" banner anywhere in the app.
 
+// Try these models in order. Different keys/projects have access to different
+// models, and the free tier rate-limits per model — so if one is unavailable
+// (404) or busy (429), we transparently fall back to the next.
+const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash-lite']
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -13,9 +18,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server.' })
   }
 
-  // Pin the model server-side to the higher-free-tier Flash model for
-  // reliability (the 2.5 model rate-limits much sooner on the free plan).
-  const model = 'gemini-2.0-flash'
   const { system, messages = [] } = req.body || {}
 
   const contents = messages
@@ -30,33 +32,47 @@ export default async function handler(req, res) {
     generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
   }
   if (system) body.systemInstruction = { parts: [{ text: system }] }
+  const payload = JSON.stringify(body)
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+  let lastStatus = 502
+  let lastDetail = ''
 
   try {
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    for (const model of MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+      let upstream
+      try {
+        upstream = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        })
+      } catch (e) {
+        lastDetail = String(e?.message || e)
+        continue // network error — try next model
+      }
 
-    if (!upstream.ok || !upstream.body) {
-      const detail = await upstream.text().catch(() => '')
-      return res.status(502).json({ error: 'Gemini request failed.', detail })
+      if (upstream.ok && upstream.body) {
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-store')
+        res.setHeader('Connection', 'keep-alive')
+        const reader = upstream.body.getReader()
+        const decoder = new TextDecoder()
+        for (;;) {
+          const { value, done } = await reader.read()
+          if (done) break
+          res.write(decoder.decode(value, { stream: true }))
+        }
+        return res.end()
+      }
+
+      // Not ok — remember why and try the next model.
+      lastStatus = upstream.status
+      lastDetail = await upstream.text().catch(() => '')
     }
 
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-store')
-    res.setHeader('Connection', 'keep-alive')
-
-    const reader = upstream.body.getReader()
-    const decoder = new TextDecoder()
-    for (;;) {
-      const { value, done } = await reader.read()
-      if (done) break
-      res.write(decoder.decode(value, { stream: true }))
-    }
-    res.end()
+    // Every model failed.
+    return res.status(502).json({ error: 'Gemini request failed.', status: lastStatus, detail: lastDetail })
   } catch (err) {
     return res.status(500).json({ error: 'Unexpected error talking to Gemini.', detail: String(err?.message || err) })
   }
