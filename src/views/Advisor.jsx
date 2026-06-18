@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send, Sparkles, Trash2, Settings as SettingsIcon, ArrowUpRight } from 'lucide-react'
+import { Send, Sparkles, Trash2, Settings as SettingsIcon, ArrowUpRight, Mic } from 'lucide-react'
 import { useStore } from '../store'
 import { streamChat } from '../lib/gemini'
 import './Advisor.css'
@@ -49,7 +49,7 @@ function renderText(text) {
   )
 }
 
-export default function Advisor({ handoff, onHandoffConsumed, onNavigate }) {
+export default function Advisor({ handoff, onHandoffConsumed, onNavigate, onVoice }) {
   const { state, dispatch } = useStore()
   const messages = state.advisor.messages
   const hasKey = !!state.settings.geminiKey
@@ -235,6 +235,11 @@ export default function Advisor({ handoff, onHandoffConsumed, onNavigate }) {
 
       <div className="composer">
         <div className="composer-inner">
+          {onVoice && (
+            <button className="composer-mic" onClick={onVoice} aria-label="Voice mode">
+              <Mic size={19} />
+            </button>
+          )}
           <textarea
             rows={1}
             placeholder="Ask your advisor…"

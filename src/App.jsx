@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Target, MessageSquare, Lightbulb, Mic } from 'lucide-react'
+import { Home, Target, Lightbulb, MessageSquare, User } from 'lucide-react'
 import Pulse from './views/Pulse'
 import Goals from './views/Goals'
 import Advisor from './views/Advisor'
@@ -9,10 +9,11 @@ import VoiceOverlay from './components/VoiceOverlay'
 import InstallPrompt from './components/InstallPrompt'
 
 const TABS = [
-  { id: 'pulse', label: 'Pulse', icon: Activity },
+  { id: 'pulse', label: 'Home', icon: Home },
   { id: 'goals', label: 'Goals', icon: Target },
+  { id: 'capture', label: 'Ideas', icon: Lightbulb },
   { id: 'advisor', label: 'Advisor', icon: MessageSquare },
-  { id: 'capture', label: 'Capture', icon: Lightbulb },
+  { id: 'settings', label: 'Profile', icon: User },
 ]
 
 export default function App() {
@@ -33,6 +34,8 @@ export default function App() {
     setView(destination)
   }
 
+  const openVoice = () => setVoiceOpen(true)
+
   return (
     <div className="app">
       {view === 'pulse' && <Pulse onNavigate={go} />}
@@ -42,24 +45,20 @@ export default function App() {
           handoff={voiceHandoff?.destination === 'advisor' ? voiceHandoff : null}
           onHandoffConsumed={() => setVoiceHandoff(null)}
           onNavigate={go}
+          onVoice={openVoice}
         />
       )}
       {view === 'capture' && (
         <Capture
           handoff={voiceHandoff?.destination === 'capture' ? voiceHandoff : null}
           onHandoffConsumed={() => setVoiceHandoff(null)}
+          onVoice={openVoice}
         />
       )}
       {view === 'settings' && <Settings onNavigate={go} />}
 
       <nav className="nav">
-        {TABS.slice(0, 2).map((t) => (
-          <NavItem key={t.id} tab={t} active={view === t.id} onClick={() => go(t.id)} />
-        ))}
-        <button className="nav-fab" aria-label="Voice mode" onClick={() => setVoiceOpen(true)}>
-          <Mic size={24} strokeWidth={2.4} />
-        </button>
-        {TABS.slice(2).map((t) => (
+        {TABS.map((t) => (
           <NavItem key={t.id} tab={t} active={view === t.id} onClick={() => go(t.id)} />
         ))}
       </nav>
@@ -77,7 +76,9 @@ function NavItem({ tab, active, onClick }) {
   const Icon = tab.icon
   return (
     <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
-      <Icon size={21} strokeWidth={active ? 2.4 : 2} />
+      <span className="nav-ring">
+        <Icon size={19} strokeWidth={active ? 2.4 : 1.9} />
+      </span>
       <span>{tab.label}</span>
     </button>
   )

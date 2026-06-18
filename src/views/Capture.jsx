@@ -14,7 +14,7 @@ function timeAgo(ts) {
   return `${d}d ago`
 }
 
-export default function Capture({ handoff, onHandoffConsumed }) {
+export default function Capture({ handoff, onHandoffConsumed, onVoice }) {
   const { state, dispatch } = useStore()
   const [text, setText] = useState('')
   const taRef = useRef(null)
@@ -53,9 +53,13 @@ export default function Capture({ handoff, onHandoffConsumed }) {
           style={{ border: 'none', background: 'transparent', padding: 0 }}
         />
         <div className="row between" style={{ marginTop: 12 }}>
-          <span className="faint" style={{ fontSize: 12 }}>
-            <Mic size={12} style={{ verticalAlign: -1 }} /> Tap the mic to speak instead
-          </span>
+          <button
+            className="chip"
+            onClick={onVoice}
+            style={{ color: 'var(--gold-bright)', borderColor: 'var(--border-strong)' }}
+          >
+            <Mic size={14} /> Speak instead
+          </button>
           <button className="btn btn-primary" onClick={add} style={{ padding: '10px 16px' }}>
             <Plus size={16} /> Capture
           </button>
