@@ -1,20 +1,14 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { PCMAudioRecorderProvider } from '@speechmatics/browser-audio-input-react'
-import workletScriptURL from '@speechmatics/browser-audio-input/pcm-audio-worklet.min.js?url'
 import { StoreProvider } from './store'
-import { sharedAudioContext } from './lib/audio'
+import './lib/audio' // create the shared AudioContext early
 import App from './App'
 import './index.css'
-
-const audioContext = sharedAudioContext
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <StoreProvider>
-      <PCMAudioRecorderProvider workletScriptURL={workletScriptURL} audioContext={audioContext}>
-        <App />
-      </PCMAudioRecorderProvider>
+      <App />
     </StoreProvider>
   </StrictMode>
 )

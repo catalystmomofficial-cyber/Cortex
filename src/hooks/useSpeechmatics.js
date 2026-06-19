@@ -1,62 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RealtimeClient } from '@speechmatics/real-time-client'
-import {
-  usePCMAudioRecorderContext,
-  usePCMAudioListener,
-} from '@speechmatics/browser-audio-input-react'
-import { resumeAudio, audioSampleRate } from '../lib/audio'
+import { sharedAudioContext, resumeAudio, audioSampleRate } from '../lib/audio'
 
 const FALLBACK_SAMPLE_RATE = 16000
 const TOKEN_ENDPOINT = '/api/speechmatics-token'
 
 /**
- * Real-time speech-to-text via Speechmatics.
- *
- * Must be used inside <PCMAudioRecorderProvider>. Returns live transcript text
- * (finalised segments + the in-progress partial) plus start/stop controls.
+ * Real-time speech-to-text via Speechmatics, capturing the mic ourselves with
+ * getUserMedia + a ScriptProcessor (works reliably across browsers, including
+ * iOS, unlike the SDK's AudioWorklet path). Exposes a live `levelRef` (0..1)
+ * for the orb and `framesRef` for diagnostics.
  */
-export function useSpeechmatics(opts = {}) {
-  const recorder = usePCMAudioRecorderContext()
-  const clientRef = useRef(null)
-  const finalRef = useRef('')
-
-  // Keep the latest callback without re-subscribing the client.
-  const onUtteranceEndRef = useRef(opts.onUtteranceEnd)
-  onUtteranceEndRef.current = opts.onUtteranceEnd
-
+export function useSpeechmatics() {
   const [status, setStatus] = useState('idle') // idle | connecting | listening | stopping | error
   const [finalText, setFinalText] = useState('')
   const [partialText, setPartialText] = useState('')
   const [error, setError] = useState('')
   const [socketState, setSocketState] = useState('')
 
-  // Diagnostic: counts mic frames captured (independent of the network), so we
-  // can tell whether the recorder is actually producing audio.
+  const clientRef = useRef(null)
+  const finalRef = useRef('')
   const framesRef = useRef(0)
+  const levelRef = useRef(0)
 
-  // Forward captured PCM frames to Speechmatics while listening.
-  usePCMAudioListener(
-    useCallback((audio) => {
-      framesRef.current += 1
-      const client = clientRef.current
-      if (client && client.socketState === 'open') {
-        client.sendAudio(audio.buffer)
-      }
-    }, [])
-  )
+  const streamRef = useRef(null)
+  const sourceRef = useRef(null)
+  const procRef = useRef(null)
 
   const cleanup = useCallback(() => {
     try {
-      recorder.stopRecording()
+      if (procRef.current) procRef.current.onaudioprocess = null
+      procRef.current?.disconnect()
     } catch {
       /* noop */
     }
+    try {
+      sourceRef.current?.disconnect()
+    } catch {
+      /* noop */
+    }
+    try {
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    } catch {
+      /* noop */
+    }
+    procRef.current = null
+    sourceRef.current = null
+    streamRef.current = null
+    levelRef.current = 0
     const client = clientRef.current
     if (client) {
       client.stopRecognition({ noTimeout: true }).catch(() => {})
       clientRef.current = null
     }
-  }, [recorder])
+  }, [])
 
   const stop = useCallback(() => {
     setStatus('stopping')
@@ -80,14 +77,44 @@ export function useSpeechmatics(opts = {}) {
     setPartialText('')
     framesRef.current = 0
 
-    // 1) Start the microphone FIRST, so the orb reacts immediately and we know
-    // capture works — independent of the transcription connection.
+    const ctx = sharedAudioContext
+    if (!ctx) {
+      setError('Audio is not supported on this device.')
+      setStatus('error')
+      return
+    }
+
+    // 1) Capture the mic ourselves so the orb reacts immediately and audio is
+    //    guaranteed to flow, independent of the transcription connection.
     try {
-      await resumeAudio() // ensure the shared context is actually running
-      await recorder.startRecording({})
+      await resumeAudio()
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      streamRef.current = stream
+      const source = ctx.createMediaStreamSource(stream)
+      sourceRef.current = source
+      const proc = ctx.createScriptProcessor(4096, 1, 1)
+      procRef.current = proc
+      proc.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0)
+        framesRef.current += 1
+        // Mic level (RMS) for the orb.
+        let s = 0
+        for (let i = 0; i < input.length; i++) s += input[i] * input[i]
+        levelRef.current = Math.min(1, Math.sqrt(s / input.length) * 4)
+        // Forward PCM to Speechmatics once connected (copy — buffer is reused).
+        const client = clientRef.current
+        if (client && client.socketState === 'open') {
+          client.sendAudio(new Float32Array(input).buffer)
+        }
+      }
+      source.connect(proc)
+      proc.connect(ctx.destination)
     } catch (e) {
       setError('Microphone could not start: ' + (e?.message || e))
       setStatus('error')
+      cleanup()
       return
     }
     setStatus('listening')
@@ -100,21 +127,17 @@ export function useSpeechmatics(opts = {}) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error || `Token endpoint returned ${res.status}`)
       }
-      const data = await res.json()
-      token = data.token
+      token = (await res.json()).token
       if (!token) throw new Error('No token returned from server.')
     } catch (e) {
       setError('Could not reach the voice service (token).')
       return // mic stays on; orb still reacts
     }
 
+    // 3) Connect Speechmatics.
     const client = new RealtimeClient()
     clientRef.current = client
-
-    client.addEventListener('socketStateChange', () => {
-      setSocketState(client.socketState || '')
-    })
-
+    client.addEventListener('socketStateChange', () => setSocketState(client.socketState || ''))
     client.addEventListener('receiveMessage', ({ data }) => {
       switch (data.message) {
         case 'AddPartialTranscript':
@@ -129,47 +152,32 @@ export function useSpeechmatics(opts = {}) {
           setPartialText('')
           break
         }
-        case 'EndOfUtterance': {
-          // The speaker paused long enough — hand the finished phrase upward.
-          const text = finalRef.current.trim()
-          if (text) onUtteranceEndRef.current?.(text)
-          break
-        }
         case 'Error':
-          setError(data.reason || 'Speechmatics error')
-          setStatus('error')
-          cleanup()
+          setError(data.reason || 'Transcription error')
           break
         default:
           break
       }
     })
 
-    // Use the actual capture rate (iOS records at the hardware rate, e.g.
-    // 48 kHz, regardless of any requested rate) so the declared rate matches.
     const sampleRate = Math.round(audioSampleRate() || FALLBACK_SAMPLE_RATE)
-
     try {
       await client.start(token, {
         audio_format: { type: 'raw', encoding: 'pcm_f32le', sample_rate: sampleRate },
         transcription_config: {
           language: 'en',
           enable_partials: true,
-          // 'standard' is available on the free tier; 'enhanced' can be rejected.
           operating_point: 'standard',
           max_delay: 1.5,
         },
       })
-      // Mic already running; transcription is now connected too.
     } catch (e) {
       setError('Transcription could not start: ' + (e?.message || e))
-      // Leave the mic running so the orb still reacts to the voice.
     }
-  }, [recorder, cleanup])
+  }, [cleanup])
 
   useEffect(() => () => cleanup(), [cleanup])
 
-  // Convenience: the complete transcript so far (final + live partial).
   const transcript = [finalText, partialText].filter(Boolean).join(' ').trim()
 
   return {
@@ -181,6 +189,7 @@ export function useSpeechmatics(opts = {}) {
     error,
     socketState,
     framesRef,
+    levelRef,
     start,
     stop,
     reset,

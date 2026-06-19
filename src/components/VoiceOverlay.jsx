@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { usePCMAudioRecorderContext } from '@speechmatics/browser-audio-input-react'
 import { useSpeechmatics } from '../hooks/useSpeechmatics'
 import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
@@ -22,14 +21,8 @@ const SUGGESTIONS = [
 export default function VoiceOverlay({ onClose }) {
   const { state } = useStore()
   const org = (state.profile.company || '').trim() || 'Cortex'
-  const recorder = usePCMAudioRecorderContext()
   const askRef = useRef(null)
-  // Auto-send the phrase once the speaker pauses (Speechmatics end-of-utterance).
-  const sm = useSpeechmatics({
-    onUtteranceEnd: (text) => {
-      if (modeRef.current === 'listening') askRef.current?.(text)
-    },
-  })
+  const sm = useSpeechmatics()
 
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
@@ -77,22 +70,13 @@ export default function VoiceOverlay({ onClose }) {
     let lastHud = -1
     let spoke = false
     let lastLoud = 0
-    const buf = new Uint8Array(2048)
     function loop() {
       t += 0.016
       const m = modeRef.current
       let lvl = 0.12 + 0.04 * Math.sin(t * 2)
       if (m === 'listening') {
-        const a = recorder.analyser
-        if (a) {
-          a.getByteTimeDomainData(buf)
-          let s = 0
-          for (let i = 0; i < a.fftSize; i++) {
-            const x = (buf[i] - 128) / 128
-            s += x * x
-          }
-          lvl = Math.min(1, Math.sqrt(s / a.fftSize) * 3.4)
-        }
+        // Live mic level from our own capture pipeline.
+        lvl = Math.max(lvl, sm.levelRef.current || 0)
         // Local voice-activity endpointing.
         const now = performance.now()
         if (lvl > 0.22) {
@@ -122,7 +106,8 @@ export default function VoiceOverlay({ onClose }) {
     }
     loop()
     return () => cancelAnimationFrame(raf)
-  }, [recorder])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // iOS requires the AudioContext to be resumed and speech unlocked *inside* a
   // user gesture (before any await), or the mic/voice silently fail.
