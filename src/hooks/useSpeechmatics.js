@@ -77,7 +77,21 @@ export function useSpeechmatics(opts = {}) {
     finalRef.current = ''
     setFinalText('')
     setPartialText('')
+    framesRef.current = 0
 
+    // 1) Start the microphone FIRST, so the orb reacts immediately and we know
+    // capture works — independent of the transcription connection.
+    try {
+      await recorder.audioContext?.resume?.()
+      await recorder.startRecording({})
+    } catch (e) {
+      setError('Microphone could not start: ' + (e?.message || e))
+      setStatus('error')
+      return
+    }
+    setStatus('listening')
+
+    // 2) Get a transcription token.
     let token
     try {
       const res = await fetch(TOKEN_ENDPOINT)
@@ -89,14 +103,10 @@ export function useSpeechmatics(opts = {}) {
       token = data.token
       if (!token) throw new Error('No token returned from server.')
     } catch (e) {
-      setError(
-        'Could not reach the voice token service. Make sure SPEECHMATICS_API_KEY is set and you are running with serverless functions (vercel dev / deployed).'
-      )
-      setStatus('error')
-      return
+      setError('Could not reach the voice service (token).')
+      return // mic stays on; orb still reacts
     }
 
-    framesRef.current = 0
     const client = new RealtimeClient()
     clientRef.current = client
 
@@ -144,26 +154,15 @@ export function useSpeechmatics(opts = {}) {
         transcription_config: {
           language: 'en',
           enable_partials: true,
-          operating_point: 'enhanced',
-          max_delay: 1.2,
-          // Auto-detect when the speaker stops talking (~1.5s of silence) and
-          // emit an EndOfUtterance message so we can send the phrase to the AI.
-          conversation_config: { end_of_utterance_silence_trigger: 1.5 },
+          // 'standard' is available on the free tier; 'enhanced' can be rejected.
+          operating_point: 'standard',
+          max_delay: 1.5,
         },
       })
-
-      // Make sure the (possibly suspended) context is running before capture.
-      try {
-        await recorder.audioContext?.resume?.()
-      } catch {
-        /* noop */
-      }
-      await recorder.startRecording({})
-      setStatus('listening')
+      // Mic already running; transcription is now connected too.
     } catch (e) {
-      setError(e?.message || 'Failed to start microphone or transcription.')
-      setStatus('error')
-      cleanup()
+      setError('Transcription could not start: ' + (e?.message || e))
+      // Leave the mic running so the orb still reacts to the voice.
     }
   }, [recorder, cleanup])
 

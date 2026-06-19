@@ -68,10 +68,14 @@ export default function VoiceOverlay({ onClose }) {
   }, [])
 
   // Drive the orb's energy from the mic (listening) or a synthetic pulse
-  // (thinking / speaking), so it visibly moves while responding.
+  // (thinking / speaking), so it visibly moves while responding. Also detects
+  // end-of-speech locally (mic goes quiet ~1.3s after speaking) to auto-send.
   useEffect(() => {
     let raf
     let t = 0
+    let lastHud = -1
+    let spoke = false
+    let lastLoud = 0
     const buf = new Uint8Array(2048)
     function loop() {
       t += 0.016
@@ -88,11 +92,24 @@ export default function VoiceOverlay({ onClose }) {
           }
           lvl = Math.min(1, Math.sqrt(s / a.fftSize) * 3.4)
         }
-      } else if (m === 'thinking') {
-        lvl = 0.3 + 0.12 * Math.sin(t * 3)
-      } else if (m === 'speaking') {
-        speakBumpRef.current *= 0.9
-        lvl = Math.min(1, 0.42 + 0.22 * Math.sin(t * 5) + speakBumpRef.current)
+        // Local voice-activity endpointing.
+        const now = performance.now()
+        if (lvl > 0.22) {
+          spoke = true
+          lastLoud = now
+        }
+        if (spoke && now - lastLoud > 1300 && transcriptRef.current.trim()) {
+          spoke = false
+          askRef.current?.(transcriptRef.current)
+        }
+      } else {
+        spoke = false
+        if (m === 'thinking') {
+          lvl = 0.3 + 0.12 * Math.sin(t * 3)
+        } else if (m === 'speaking') {
+          speakBumpRef.current *= 0.9
+          lvl = Math.min(1, 0.42 + 0.22 * Math.sin(t * 5) + speakBumpRef.current)
+        }
       }
       levelRef.current = lvl
       // Throttled HUD update (~5x/sec) for the diagnostic readout.
@@ -102,7 +119,6 @@ export default function VoiceOverlay({ onClose }) {
       }
       raf = requestAnimationFrame(loop)
     }
-    let lastHud = -1
     loop()
     return () => cancelAnimationFrame(raf)
   }, [recorder])
