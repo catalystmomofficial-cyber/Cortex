@@ -58,33 +58,76 @@ export function unlockSpeech() {
   }
 }
 
+// Bumping the session supersedes/cancels any in-flight chunk queue.
+let speakSession = 0
+
 export function cancelSpeech() {
+  speakSession++
   if (isSpeechSupported()) speechSynthesis.cancel()
 }
 
+// Split into sentence-ish chunks (<=~200 chars). Chrome stops speaking a single
+// long utterance after ~15s, so we queue shorter ones to avoid the cutoff.
+function chunkText(text) {
+  const parts = text.match(/[^.!?。！？\n]+[.!?。！？\n]*/g) || [text]
+  const chunks = []
+  let cur = ''
+  for (const p of parts) {
+    if ((cur + p).length > 200 && cur) {
+      chunks.push(cur.trim())
+      cur = p
+    } else {
+      cur += p
+    }
+  }
+  if (cur.trim()) chunks.push(cur.trim())
+  return chunks
+}
+
 /**
- * Speak some text aloud.
+ * Speak some text aloud (queued in chunks for reliability).
  * @param {string} text
  * @param {object} [cb]
+ * @param {string} [cb.lang]
  * @param {()=>void} [cb.onStart]
  * @param {()=>void} [cb.onBoundary] - fires per word/sentence
- * @param {()=>void} [cb.onEnd]
+ * @param {()=>void} [cb.onEnd] - fires once, after the last chunk
  */
 export function speak(text, { lang = 'en-US', onStart, onBoundary, onEnd } = {}) {
   if (!isSpeechSupported() || !text) {
     onEnd?.()
     return
   }
+  const mySession = ++speakSession
   speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
+
+  const chunks = chunkText(text)
   const v = pickVoice(lang)
-  if (v) u.voice = v
-  u.lang = v?.lang || lang
-  u.rate = 1.0
-  u.pitch = 1.0
-  u.onstart = () => onStart?.()
-  u.onboundary = () => onBoundary?.()
-  u.onend = () => onEnd?.()
-  u.onerror = () => onEnd?.()
-  speechSynthesis.speak(u)
+  let i = 0
+  let started = false
+
+  function next() {
+    if (mySession !== speakSession) return // superseded or cancelled
+    if (i >= chunks.length) {
+      onEnd?.()
+      return
+    }
+    const u = new SpeechSynthesisUtterance(chunks[i++])
+    if (v) u.voice = v
+    u.lang = v?.lang || lang
+    u.rate = 1.0
+    u.pitch = 1.0
+    u.onstart = () => {
+      if (!started) {
+        started = true
+        onStart?.()
+      }
+    }
+    u.onboundary = () => onBoundary?.()
+    u.onend = () => next()
+    u.onerror = () => next()
+    speechSynthesis.speak(u)
+  }
+
+  next()
 }
