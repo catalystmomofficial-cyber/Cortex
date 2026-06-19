@@ -257,3 +257,15 @@
 .voice-dest-row .btn {
   flex: 1;
 }
+
+/* Temporary diagnostic readout */
+.voice-debug {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.8;
+  word-break: break-word;
+}

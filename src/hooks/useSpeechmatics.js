@@ -27,10 +27,16 @@ export function useSpeechmatics(opts = {}) {
   const [finalText, setFinalText] = useState('')
   const [partialText, setPartialText] = useState('')
   const [error, setError] = useState('')
+  const [socketState, setSocketState] = useState('')
+
+  // Diagnostic: counts mic frames captured (independent of the network), so we
+  // can tell whether the recorder is actually producing audio.
+  const framesRef = useRef(0)
 
   // Forward captured PCM frames to Speechmatics while listening.
   usePCMAudioListener(
     useCallback((audio) => {
+      framesRef.current += 1
       const client = clientRef.current
       if (client && client.socketState === 'open') {
         client.sendAudio(audio.buffer)
@@ -90,8 +96,13 @@ export function useSpeechmatics(opts = {}) {
       return
     }
 
+    framesRef.current = 0
     const client = new RealtimeClient()
     clientRef.current = client
+
+    client.addEventListener('socketStateChange', () => {
+      setSocketState(client.socketState || '')
+    })
 
     client.addEventListener('receiveMessage', ({ data }) => {
       switch (data.message) {
@@ -141,6 +152,12 @@ export function useSpeechmatics(opts = {}) {
         },
       })
 
+      // Make sure the (possibly suspended) context is running before capture.
+      try {
+        await recorder.audioContext?.resume?.()
+      } catch {
+        /* noop */
+      }
       await recorder.startRecording({})
       setStatus('listening')
     } catch (e) {
@@ -162,6 +179,8 @@ export function useSpeechmatics(opts = {}) {
     finalText,
     partialText,
     error,
+    socketState,
+    framesRef,
     start,
     stop,
     reset,

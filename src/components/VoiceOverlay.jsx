@@ -33,6 +33,7 @@ export default function VoiceOverlay({ onClose }) {
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
+  const [hudLvl, setHudLvl] = useState(0)
 
   const levelRef = useRef(0)
   const modeRef = useRef('idle')
@@ -47,6 +48,14 @@ export default function VoiceOverlay({ onClose }) {
   useEffect(() => {
     transcriptRef.current = sm.transcript
   }, [sm.transcript])
+
+  // Surface mic/transcription errors instead of "Listening…" forever.
+  useEffect(() => {
+    if (sm.status === 'error' && sm.error) {
+      setError(sm.error)
+      setMode('idle')
+    }
+  }, [sm.status, sm.error])
 
   // Tear everything down on close.
   useEffect(() => {
@@ -86,8 +95,14 @@ export default function VoiceOverlay({ onClose }) {
         lvl = Math.min(1, 0.42 + 0.22 * Math.sin(t * 5) + speakBumpRef.current)
       }
       levelRef.current = lvl
+      // Throttled HUD update (~5x/sec) for the diagnostic readout.
+      if (Math.floor(t * 5) !== lastHud) {
+        lastHud = Math.floor(t * 5)
+        setHudLvl(lvl)
+      }
       raf = requestAnimationFrame(loop)
     }
+    let lastHud = -1
     loop()
     return () => cancelAnimationFrame(raf)
   }, [recorder])
@@ -235,6 +250,10 @@ export default function VoiceOverlay({ onClose }) {
         </div>
 
         {error && <div className="voice-error">{error}</div>}
+
+        <div className="voice-debug">
+          {`status:${sm.status} · socket:${sm.socketState || '—'} · mic-frames:${sm.framesRef.current} · lvl:${hudLvl.toFixed(2)} · heard:${sm.transcript.length}`}
+        </div>
       </div>
 
       <div className={`voice-suggestions ${showPrompts ? '' : 'hidden'}`}>
