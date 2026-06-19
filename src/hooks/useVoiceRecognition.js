@@ -49,8 +49,60 @@ export function useVoiceRecognition() {
     levelRef.current = 0
   }, [])
 
-  const cleanup = useCallback(() => {
-    listeningRef.current = false
+  // Build + start a fresh recognition instance (Web Speech can't reliably be
+  // reused after abort, so we relaunch).
+  const launch = useCallback(() => {
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!Rec) return
+    const r = new Rec()
+    r.continuous = true
+    r.interimResults = true
+    r.lang = 'en-US'
+
+    r.onresult = (e) => {
+      let interim = ''
+      let finalAdd = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i]
+        if (res.isFinal) finalAdd += res[0].transcript
+        else interim += res[0].transcript
+      }
+      if (finalAdd) {
+        finalRef.current = `${finalRef.current} ${finalAdd}`.replace(/\s+/g, ' ').trim()
+        setFinalText(finalRef.current)
+      }
+      setPartialText(interim)
+    }
+
+    r.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setError('Microphone permission was denied.')
+      } else {
+        setError('Voice error: ' + e.error)
+      }
+    }
+
+    r.onend = () => {
+      // Web Speech stops on its own; keep it going while listening & unmuted.
+      if (listeningRef.current && !mutedRef.current && recRef.current === r) {
+        try {
+          r.start()
+        } catch {
+          /* already started */
+        }
+      }
+    }
+
+    recRef.current = r
+    try {
+      r.start()
+    } catch {
+      /* already started */
+    }
+  }, [])
+
+  const abortRecognition = useCallback(() => {
     const r = recRef.current
     if (r) {
       r.onend = null
@@ -63,8 +115,13 @@ export function useVoiceRecognition() {
       }
       recRef.current = null
     }
+  }, [])
+
+  const cleanup = useCallback(() => {
+    listeningRef.current = false
+    abortRecognition()
     stopLevel()
-  }, [stopLevel])
+  }, [abortRecognition, stopLevel])
 
   const stop = useCallback(() => {
     cleanup()
@@ -116,6 +173,8 @@ export function useVoiceRecognition() {
     setFinalText('')
     setPartialText('')
     framesRef.current = 0
+    mutedRef.current = false
+    setMuted(false)
 
     if (!supported) {
       setError('Voice input is not supported in this browser. Try Chrome or Safari.')
@@ -124,80 +183,23 @@ export function useVoiceRecognition() {
     }
 
     await startLevel()
-
-    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition
-    const r = new Rec()
-    r.continuous = true
-    r.interimResults = true
-    r.lang = 'en-US'
-
-    r.onresult = (e) => {
-      let interim = ''
-      let finalAdd = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i]
-        if (res.isFinal) finalAdd += res[0].transcript
-        else interim += res[0].transcript
-      }
-      if (finalAdd) {
-        finalRef.current = `${finalRef.current} ${finalAdd}`.replace(/\s+/g, ' ').trim()
-        setFinalText(finalRef.current)
-      }
-      setPartialText(interim)
-    }
-
-    r.onerror = (e) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        setError('Microphone permission was denied.')
-      } else {
-        setError('Voice error: ' + e.error)
-      }
-    }
-
-    r.onend = () => {
-      // Web Speech stops on its own; keep it going while we're listening.
-      if (listeningRef.current && !mutedRef.current) {
-        try {
-          r.start()
-        } catch {
-          /* already started */
-        }
-      }
-    }
-
-    recRef.current = r
     listeningRef.current = true
-    try {
-      r.start()
-      setStatus('listening')
-    } catch (e) {
-      setError('Could not start voice: ' + (e?.message || e))
-      setStatus('error')
-    }
-  }, [supported])
+    launch()
+    setStatus('listening')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supported, launch])
 
   const toggleMute = useCallback(() => {
     const next = !mutedRef.current
     mutedRef.current = next
     setMuted(next)
-    const r = recRef.current
     if (next) {
-      // Muted: stop recognising (so the advisor's voice isn't picked up).
-      try {
-        r?.abort()
-      } catch {
-        /* noop */
-      }
+      abortRecognition() // stop recognising so nothing is picked up
       levelRef.current = 0
-    } else if (listeningRef.current && r) {
-      try {
-        r.start()
-      } catch {
-        /* noop */
-      }
+    } else if (listeningRef.current) {
+      launch() // fresh instance
     }
-  }, [])
+  }, [abortRecognition, launch])
 
   useEffect(() => () => cleanup(), [cleanup])
 

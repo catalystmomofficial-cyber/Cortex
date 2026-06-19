@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send, Sparkles, Trash2, ArrowUpRight, Mic } from 'lucide-react'
+import { Send, Sparkles, Trash2, ArrowUpRight, Mic, AudioLines } from 'lucide-react'
 import { useStore } from '../store'
 import { streamChat } from '../lib/gemini'
 import { buildSystemPrompt } from '../lib/prompt'
+import { useDictation } from '../hooks/useDictation'
 import './Advisor.css'
 
 const SUGGESTIONS = [
@@ -32,6 +33,21 @@ export default function Advisor({ onVoice }) {
   const threadRef = useRef(null)
   const abortRef = useRef(null)
 
+  // Dictation: transcribes speech into the text box (stays for editing/sending).
+  const dictateBaseRef = useRef('')
+  const dictation = useDictation((text) => {
+    setInput((dictateBaseRef.current ? dictateBaseRef.current + ' ' : '') + text)
+  })
+
+  function toggleDictation() {
+    if (dictation.listening) {
+      dictation.stop()
+    } else {
+      dictateBaseRef.current = input.trim()
+      dictation.start()
+    }
+  }
+
   function scrollToBottom() {
     requestAnimationFrame(() => {
       const el = threadRef.current
@@ -43,6 +59,7 @@ export default function Advisor({ onVoice }) {
     const content = (rawText ?? input).trim()
     if (!content || busy) return
     setError('')
+    if (dictation.listening) dictation.stop()
 
     const next = [...messages, { role: 'user', content }]
     dispatch({ type: 'SET_ADVISOR_MESSAGES', messages: next })
@@ -160,8 +177,12 @@ export default function Advisor({ onVoice }) {
 
       <div className="composer">
         <div className="composer-inner">
-          {onVoice && (
-            <button className="composer-mic" onClick={onVoice} aria-label="Voice mode">
+          {dictation.supported && (
+            <button
+              className={`composer-icon-btn ${dictation.listening ? 'active' : ''}`}
+              onClick={toggleDictation}
+              aria-label={dictation.listening ? 'Stop dictation' : 'Dictate'}
+            >
               <Mic size={19} />
             </button>
           )}
@@ -181,9 +202,17 @@ export default function Advisor({ onVoice }) {
               }
             }}
           />
-          <button className="composer-send" disabled={busy || !input.trim()} onClick={() => send()} aria-label="Send">
-            <Send size={18} />
-          </button>
+          {input.trim() ? (
+            <button className="composer-send" disabled={busy} onClick={() => send()} aria-label="Send">
+              <Send size={18} />
+            </button>
+          ) : (
+            onVoice && (
+              <button className="composer-voice" onClick={onVoice} aria-label="Voice mode">
+                <AudioLines size={19} />
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>
