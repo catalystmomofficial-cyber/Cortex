@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
+import { LANGUAGES } from '../lib/languages'
 
 export default function Settings({ onNavigate }) {
   const { state, dispatch } = useStore()
@@ -71,6 +72,28 @@ export default function Settings({ onNavigate }) {
           onChange={(v) => setProfile({ win90: v })}
           placeholder="e.g. 25 retainer clients"
         />
+      </div>
+
+      <div className="section-title">
+        <h2>Language</h2>
+      </div>
+      <div className="card">
+        <label className="label">Advisor & voice language</label>
+        <select
+          className="input"
+          value={state.settings.language || 'en-US'}
+          onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', patch: { language: e.target.value } })}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code} style={{ background: '#16131a' }}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <p className="faint" style={{ fontSize: 12, marginTop: 8 }}>
+          The advisor listens, replies, and speaks in this language. Voice quality depends on the
+          voices your device has installed.
+        </p>
       </div>
 
       <button className="btn btn-primary btn-block" style={{ marginTop: 22 }} onClick={flashSaved}>

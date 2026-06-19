@@ -14,20 +14,29 @@ if (typeof speechSynthesis !== 'undefined') {
   speechSynthesis.onvoiceschanged = loadVoices
 }
 
-// Prefer a natural-sounding English voice when available.
-function pickVoice() {
+// Pick the nicest available voice for a given BCP-47 language (e.g. 'fil-PH').
+// Prefers higher-quality "Google"/"Natural"/"Premium" voices, matches the
+// language, and falls back gracefully so multilingual output still speaks.
+function pickVoice(lang = 'en-US') {
   const voices = voicesCache.length ? voicesCache : loadVoices()
-  const preferred = [
-    'Google UK English Female',
-    'Google US English',
-    'Samantha',
-    'Microsoft Aria Online (Natural) - English (United States)',
-  ]
-  for (const name of preferred) {
-    const v = voices.find((x) => x.name === name)
-    if (v) return v
+  if (!voices.length) return null
+
+  const base = (lang || 'en-US').slice(0, 2).toLowerCase()
+  const sameLang = voices.filter((v) => (v.lang || '').toLowerCase().startsWith(base))
+  const pool = sameLang.length ? sameLang : voices
+
+  const score = (v) => {
+    const n = (v.name || '').toLowerCase()
+    let s = 0
+    if (/google/.test(n)) s += 5
+    if (/natural|premium|enhanced|neural/.test(n)) s += 4
+    if (/(^|\W)(female|samantha|aria|jenny|rosa)\b/.test(n)) s += 1
+    if (v.localService === false) s += 1 // network voices are usually richer
+    if ((v.lang || '').toLowerCase() === (lang || '').toLowerCase()) s += 2 // exact region
+    return s
   }
-  return voices.find((v) => /en[-_]/i.test(v.lang)) || voices[0] || null
+
+  return [...pool].sort((a, b) => score(b) - score(a))[0] || voices[0] || null
 }
 
 export function isSpeechSupported() {
@@ -61,16 +70,17 @@ export function cancelSpeech() {
  * @param {()=>void} [cb.onBoundary] - fires per word/sentence
  * @param {()=>void} [cb.onEnd]
  */
-export function speak(text, { onStart, onBoundary, onEnd } = {}) {
+export function speak(text, { lang = 'en-US', onStart, onBoundary, onEnd } = {}) {
   if (!isSpeechSupported() || !text) {
     onEnd?.()
     return
   }
   speechSynthesis.cancel()
   const u = new SpeechSynthesisUtterance(text)
-  const v = pickVoice()
+  const v = pickVoice(lang)
   if (v) u.voice = v
-  u.rate = 1.02
+  u.lang = v?.lang || lang
+  u.rate = 1.0
   u.pitch = 1.0
   u.onstart = () => onStart?.()
   u.onboundary = () => onBoundary?.()

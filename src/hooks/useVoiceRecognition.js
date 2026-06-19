@@ -4,7 +4,9 @@ import { sharedAudioContext, resumeAudio } from '../lib/audio'
 // Free, no-key, no-quota speech recognition using the browser's built-in
 // Web Speech API. We also run our own mic capture purely to drive the orb's
 // live level (the Web Speech API doesn't expose audio levels).
-export function useVoiceRecognition() {
+export function useVoiceRecognition(lang = 'en-US') {
+  const langRef = useRef(lang)
+  langRef.current = lang
   const [status, setStatus] = useState('idle') // idle | listening | error
   const [finalText, setFinalText] = useState('')
   const [partialText, setPartialText] = useState('')
@@ -57,7 +59,7 @@ export function useVoiceRecognition() {
     const r = new Rec()
     r.continuous = true
     r.interimResults = true
-    r.lang = 'en-US'
+    r.lang = langRef.current || 'en-US'
 
     r.onresult = (e) => {
       let interim = ''

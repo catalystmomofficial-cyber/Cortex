@@ -6,6 +6,7 @@ import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
 import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
 import { resumeAudio } from '../lib/audio'
+import { LANGUAGES } from '../lib/languages'
 import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
@@ -19,10 +20,11 @@ const SUGGESTIONS = [
 // Conversational voice advisor — listen, think, speak — with the gold orb
 // reacting throughout (like ChatGPT / Gemini voice mode).
 export default function VoiceOverlay({ onClose }) {
-  const { state } = useStore()
+  const { state, dispatch } = useStore()
   const org = (state.profile.company || '').trim() || 'Cortex'
+  const lang = state.settings.language || 'en-US'
   const askRef = useRef(null)
-  const sm = useVoiceRecognition()
+  const sm = useVoiceRecognition(lang)
 
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
@@ -144,6 +146,7 @@ export default function VoiceOverlay({ onClose }) {
       historyRef.current = [...msgs, { role: 'assistant', content: acc }]
       setMode('speaking')
       speak(acc, {
+        lang,
         onBoundary: () => {
           speakBumpRef.current = Math.min(0.5, speakBumpRef.current + 0.18)
         },
@@ -213,9 +216,27 @@ export default function VoiceOverlay({ onClose }) {
             <span className="dot" /> {org}
           </div>
         </div>
-        <button className="voice-close" aria-label="Close" onClick={onClose}>
-          <X size={22} />
-        </button>
+        <div className="row" style={{ gap: 10 }}>
+          <select
+            className="voice-lang"
+            value={lang}
+            onChange={(e) => {
+              if (sm.isListening) sm.stop()
+              setMode('idle')
+              dispatch({ type: 'UPDATE_SETTINGS', patch: { language: e.target.value } })
+            }}
+            aria-label="Language"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code} style={{ background: '#16131a', color: '#f5efe2' }}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <button className="voice-close" aria-label="Close" onClick={onClose}>
+            <X size={22} />
+          </button>
+        </div>
       </div>
 
       <div className="voice-center">

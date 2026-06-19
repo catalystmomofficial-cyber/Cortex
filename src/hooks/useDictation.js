@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // text field (like the Gemini mic). Calls onText(runningText) with the live
 // transcript; the caller decides how to place it in the input. No audio-level
 // capture — this is just speech-to-text that stays for editing/sending.
-export function useDictation(onText) {
+export function useDictation(onText, lang = 'en-US') {
   const [listening, setListening] = useState(false)
   const recRef = useRef(null)
   const listeningRef = useRef(false)
   const finalRef = useRef('')
   const onTextRef = useRef(onText)
   onTextRef.current = onText
+  const langRef = useRef(lang)
+  langRef.current = lang
 
   const supported =
     typeof window !== 'undefined' &&
@@ -22,7 +24,7 @@ export function useDictation(onText) {
     const r = new Rec()
     r.continuous = true
     r.interimResults = true
-    r.lang = 'en-US'
+    r.lang = langRef.current || 'en-US'
 
     r.onresult = (e) => {
       let interim = ''

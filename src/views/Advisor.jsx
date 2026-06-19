@@ -35,9 +35,12 @@ export default function Advisor({ onVoice }) {
 
   // Dictation: transcribes speech into the text box (stays for editing/sending).
   const dictateBaseRef = useRef('')
-  const dictation = useDictation((text) => {
-    setInput((dictateBaseRef.current ? dictateBaseRef.current + ' ' : '') + text)
-  })
+  const dictation = useDictation(
+    (text) => {
+      setInput((dictateBaseRef.current ? dictateBaseRef.current + ' ' : '') + text)
+    },
+    state.settings.language || 'en-US'
+  )
 
   function toggleDictation() {
     if (dictation.listening) {

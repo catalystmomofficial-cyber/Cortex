@@ -18,6 +18,7 @@ const defaultState = {
   settings: {
     geminiKey: '',
     geminiModel: 'gemini-2.0-flash',
+    language: 'en-US',
   },
   advisor: {
     messages: [],
