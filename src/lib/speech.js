@@ -34,6 +34,21 @@ export function isSpeechSupported() {
   return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'
 }
 
+// iOS only allows speechSynthesis after it's first triggered inside a user
+// gesture. Call this from a tap handler once to "unlock" it.
+let unlocked = false
+export function unlockSpeech() {
+  if (unlocked || !isSpeechSupported()) return
+  unlocked = true
+  try {
+    const u = new SpeechSynthesisUtterance('')
+    u.volume = 0
+    speechSynthesis.speak(u)
+  } catch {
+    /* noop */
+  }
+}
+
 export function cancelSpeech() {
   if (isSpeechSupported()) speechSynthesis.cancel()
 }

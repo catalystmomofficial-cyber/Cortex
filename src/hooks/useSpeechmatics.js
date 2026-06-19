@@ -14,10 +14,14 @@ const TOKEN_ENDPOINT = '/api/speechmatics-token'
  * Must be used inside <PCMAudioRecorderProvider>. Returns live transcript text
  * (finalised segments + the in-progress partial) plus start/stop controls.
  */
-export function useSpeechmatics() {
+export function useSpeechmatics(opts = {}) {
   const recorder = usePCMAudioRecorderContext()
   const clientRef = useRef(null)
   const finalRef = useRef('')
+
+  // Keep the latest callback without re-subscribing the client.
+  const onUtteranceEndRef = useRef(opts.onUtteranceEnd)
+  onUtteranceEndRef.current = opts.onUtteranceEnd
 
   const [status, setStatus] = useState('idle') // idle | connecting | listening | stopping | error
   const [finalText, setFinalText] = useState('')
@@ -103,6 +107,12 @@ export function useSpeechmatics() {
           setPartialText('')
           break
         }
+        case 'EndOfUtterance': {
+          // The speaker paused long enough — hand the finished phrase upward.
+          const text = finalRef.current.trim()
+          if (text) onUtteranceEndRef.current?.(text)
+          break
+        }
         case 'Error':
           setError(data.reason || 'Speechmatics error')
           setStatus('error')
@@ -125,6 +135,9 @@ export function useSpeechmatics() {
           enable_partials: true,
           operating_point: 'enhanced',
           max_delay: 1.2,
+          // Auto-detect when the speaker stops talking (~1.5s of silence) and
+          // emit an EndOfUtterance message so we can send the phrase to the AI.
+          conversation_config: { end_of_utterance_silence_trigger: 1.5 },
         },
       })
 

@@ -5,7 +5,7 @@ import { useSpeechmatics } from '../hooks/useSpeechmatics'
 import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
-import { speak, cancelSpeech } from '../lib/speech'
+import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
 import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
@@ -22,7 +22,13 @@ export default function VoiceOverlay({ onClose }) {
   const { state } = useStore()
   const org = (state.profile.company || '').trim() || 'Cortex'
   const recorder = usePCMAudioRecorderContext()
-  const sm = useSpeechmatics()
+  const askRef = useRef(null)
+  // Auto-send the phrase once the speaker pauses (Speechmatics end-of-utterance).
+  const sm = useSpeechmatics({
+    onUtteranceEnd: (text) => {
+      if (modeRef.current === 'listening') askRef.current?.(text)
+    },
+  })
 
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
@@ -86,6 +92,17 @@ export default function VoiceOverlay({ onClose }) {
     return () => cancelAnimationFrame(raf)
   }, [recorder])
 
+  // iOS requires the AudioContext to be resumed and speech unlocked *inside* a
+  // user gesture (before any await), or the mic/voice silently fail.
+  function primeAudio() {
+    try {
+      recorder.audioContext?.resume?.()
+    } catch {
+      /* noop */
+    }
+    unlockSpeech()
+  }
+
   function startListening() {
     cancelSpeech()
     sm.reset()
@@ -141,7 +158,11 @@ export default function VoiceOverlay({ onClose }) {
     }
   }
 
+  // Keep the ref pointing at the latest ask for the end-of-utterance callback.
+  askRef.current = ask
+
   function onOrbTap() {
+    primeAudio()
     const m = modeRef.current
     if (m === 'thinking') return
     if (m === 'speaking') {
@@ -219,7 +240,15 @@ export default function VoiceOverlay({ onClose }) {
       <div className={`voice-suggestions ${showPrompts ? '' : 'hidden'}`}>
         <div className="voice-trylabel">Try saying</div>
         {SUGGESTIONS.map((s) => (
-          <button key={s} className="gold-pill" onClick={() => ask(s)} tabIndex={showPrompts ? 0 : -1}>
+          <button
+            key={s}
+            className="gold-pill"
+            onClick={() => {
+              primeAudio()
+              ask(s)
+            }}
+            tabIndex={showPrompts ? 0 : -1}
+          >
             {s}
           </button>
         ))}
