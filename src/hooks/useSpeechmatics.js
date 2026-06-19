@@ -4,6 +4,7 @@ import {
   usePCMAudioRecorderContext,
   usePCMAudioListener,
 } from '@speechmatics/browser-audio-input-react'
+import { resumeAudio, audioSampleRate } from '../lib/audio'
 
 const FALLBACK_SAMPLE_RATE = 16000
 const TOKEN_ENDPOINT = '/api/speechmatics-token'
@@ -82,7 +83,7 @@ export function useSpeechmatics(opts = {}) {
     // 1) Start the microphone FIRST, so the orb reacts immediately and we know
     // capture works — independent of the transcription connection.
     try {
-      await recorder.audioContext?.resume?.()
+      await resumeAudio() // ensure the shared context is actually running
       await recorder.startRecording({})
     } catch (e) {
       setError('Microphone could not start: ' + (e?.message || e))
@@ -146,7 +147,7 @@ export function useSpeechmatics(opts = {}) {
 
     // Use the actual capture rate (iOS records at the hardware rate, e.g.
     // 48 kHz, regardless of any requested rate) so the declared rate matches.
-    const sampleRate = Math.round(recorder.audioContext?.sampleRate || FALLBACK_SAMPLE_RATE)
+    const sampleRate = Math.round(audioSampleRate() || FALLBACK_SAMPLE_RATE)
 
     try {
       await client.start(token, {

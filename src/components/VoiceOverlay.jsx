@@ -6,6 +6,7 @@ import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
 import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
+import { resumeAudio, audioState } from '../lib/audio'
 import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
@@ -126,11 +127,7 @@ export default function VoiceOverlay({ onClose }) {
   // iOS requires the AudioContext to be resumed and speech unlocked *inside* a
   // user gesture (before any await), or the mic/voice silently fail.
   function primeAudio() {
-    try {
-      recorder.audioContext?.resume?.()
-    } catch {
-      /* noop */
-    }
+    resumeAudio() // resume the real shared context, inside the gesture
     unlockSpeech()
   }
 
@@ -268,7 +265,7 @@ export default function VoiceOverlay({ onClose }) {
         {error && <div className="voice-error">{error}</div>}
 
         <div className="voice-debug">
-          {`status:${sm.status} · socket:${sm.socketState || '—'} · mic-frames:${sm.framesRef.current} · lvl:${hudLvl.toFixed(2)} · heard:${sm.transcript.length}`}
+          {`status:${sm.status} · ctx:${audioState()} · socket:${sm.socketState || '—'} · mic-frames:${sm.framesRef.current} · lvl:${hudLvl.toFixed(2)} · heard:${sm.transcript.length}`}
         </div>
       </div>
 
