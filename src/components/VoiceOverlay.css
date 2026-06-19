@@ -258,14 +258,23 @@
   flex: 1;
 }
 
-/* Temporary diagnostic readout */
-.voice-debug {
-  margin-top: 10px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-faint);
-  text-align: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  opacity: 0.8;
-  word-break: break-word;
+/* Mic mute toggle */
+.voice-mute {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.voice-mute.on {
+  color: var(--red);
+  background: rgba(224, 122, 114, 0.12);
+  border-color: rgba(224, 122, 114, 0.3);
 }

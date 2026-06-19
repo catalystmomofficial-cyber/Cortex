@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
-import { useSpeechmatics } from '../hooks/useSpeechmatics'
+import { X, Mic, MicOff } from 'lucide-react'
+import { useVoiceRecognition } from '../hooks/useVoiceRecognition'
 import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
 import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
-import { resumeAudio, audioState } from '../lib/audio'
+import { resumeAudio } from '../lib/audio'
 import VoiceOrb from './VoiceOrb'
 import './VoiceOverlay.css'
 
@@ -22,12 +22,11 @@ export default function VoiceOverlay({ onClose }) {
   const { state } = useStore()
   const org = (state.profile.company || '').trim() || 'Cortex'
   const askRef = useRef(null)
-  const sm = useSpeechmatics()
+  const sm = useVoiceRecognition()
 
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
-  const [hudLvl, setHudLvl] = useState(0)
 
   const levelRef = useRef(0)
   const modeRef = useRef('idle')
@@ -67,7 +66,6 @@ export default function VoiceOverlay({ onClose }) {
   useEffect(() => {
     let raf
     let t = 0
-    let lastHud = -1
     let spoke = false
     let lastLoud = 0
     function loop() {
@@ -97,11 +95,6 @@ export default function VoiceOverlay({ onClose }) {
         }
       }
       levelRef.current = lvl
-      // Throttled HUD update (~5x/sec) for the diagnostic readout.
-      if (Math.floor(t * 5) !== lastHud) {
-        lastHud = Math.floor(t * 5)
-        setHudLvl(lvl)
-      }
       raf = requestAnimationFrame(loop)
     }
     loop()
@@ -197,18 +190,19 @@ export default function VoiceOverlay({ onClose }) {
   }
 
   const label =
-    sm.status === 'connecting' && mode === 'listening'
-      ? 'Connecting…'
-      : mode === 'listening'
-        ? 'Listening…'
-        : mode === 'thinking'
-          ? 'Thinking…'
-          : mode === 'speaking'
-            ? 'Speaking…'
-            : 'Tap to speak'
+    mode === 'listening'
+      ? sm.muted
+        ? 'Muted'
+        : 'Listening…'
+      : mode === 'thinking'
+        ? 'Thinking…'
+        : mode === 'speaking'
+          ? 'Speaking…'
+          : 'Tap to speak'
 
   const inConversation = mode === 'thinking' || mode === 'speaking'
   const showPrompts = mode === 'idle' // suggestions only at rest
+  const showMute = mode === 'listening'
 
   return (
     <div className="voice-overlay">
@@ -227,7 +221,7 @@ export default function VoiceOverlay({ onClose }) {
       <div className="voice-center">
         <div className="voice-state">{label}</div>
 
-        <div className={`orb-stage ${mode === 'listening' || mode === 'speaking' ? 'listening' : ''}`}>
+        <div className={`orb-stage ${(mode === 'listening' && !sm.muted) || mode === 'speaking' ? 'listening' : ''}`}>
           <span className="orb-ring r1" />
           <span className="orb-ring r2" />
           <span className="orb-ring r3" />
@@ -247,12 +241,18 @@ export default function VoiceOverlay({ onClose }) {
           ) : null}
         </div>
 
-        {error && <div className="voice-error">{error}</div>}
+        {showMute && (
+          <button
+            className={`voice-mute ${sm.muted ? 'on' : ''}`}
+            onClick={sm.toggleMute}
+            aria-label={sm.muted ? 'Unmute microphone' : 'Mute microphone'}
+          >
+            {sm.muted ? <MicOff size={18} /> : <Mic size={18} />}
+            {sm.muted ? 'Unmute' : 'Mute'}
+          </button>
+        )}
 
-        <div className="voice-debug">
-          {`status:${sm.status} · ctx:${audioState()} · socket:${sm.socketState || '—'} · mic-frames:${sm.framesRef.current} · lvl:${hudLvl.toFixed(2)} · heard:${sm.transcript.length}`}
-          {sm.error ? ` · err:${sm.error}` : ''}
-        </div>
+        {error && <div className="voice-error">{error}</div>}
       </div>
 
       <div className={`voice-suggestions ${showPrompts ? '' : 'hidden'}`}>
