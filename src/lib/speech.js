@@ -1,43 +1,9 @@
 // Thin wrapper around the browser's built-in SpeechSynthesis (free, no key,
-// no network) so the advisor can speak its replies aloud.
+// no network) so the advisor can speak its replies aloud. We intentionally use
+// the browser's DEFAULT voice — it's the clearest across devices. (A nicer
+// dedicated voice will come with a proper TTS like Piper later.)
 
-let voicesCache = []
 
-function loadVoices() {
-  if (typeof speechSynthesis === 'undefined') return []
-  voicesCache = speechSynthesis.getVoices() || []
-  return voicesCache
-}
-
-if (typeof speechSynthesis !== 'undefined') {
-  loadVoices()
-  speechSynthesis.onvoiceschanged = loadVoices
-}
-
-// Pick the nicest available voice for a given BCP-47 language (e.g. 'fil-PH').
-// Prefers higher-quality "Google"/"Natural"/"Premium" voices, matches the
-// language, and falls back gracefully so multilingual output still speaks.
-function pickVoice(lang = 'en-US') {
-  const voices = voicesCache.length ? voicesCache : loadVoices()
-  if (!voices.length) return null
-
-  const base = (lang || 'en-US').slice(0, 2).toLowerCase()
-  const sameLang = voices.filter((v) => (v.lang || '').toLowerCase().startsWith(base))
-  const pool = sameLang.length ? sameLang : voices
-
-  const score = (v) => {
-    const n = (v.name || '').toLowerCase()
-    let s = 0
-    if (/google/.test(n)) s += 5
-    if (/natural|premium|enhanced|neural/.test(n)) s += 4
-    if (/(^|\W)(female|samantha|aria|jenny|rosa)\b/.test(n)) s += 1
-    if (v.localService === false) s += 1 // network voices are usually richer
-    if ((v.lang || '').toLowerCase() === (lang || '').toLowerCase()) s += 2 // exact region
-    return s
-  }
-
-  return [...pool].sort((a, b) => score(b) - score(a))[0] || voices[0] || null
-}
 
 export function isSpeechSupported() {
   return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'
@@ -102,7 +68,6 @@ export function speak(text, { lang = 'en-US', onStart, onBoundary, onEnd } = {})
   speechSynthesis.cancel()
 
   const chunks = chunkText(text)
-  const v = pickVoice(lang)
   let i = 0
   let started = false
 
@@ -113,8 +78,8 @@ export function speak(text, { lang = 'en-US', onStart, onBoundary, onEnd } = {})
       return
     }
     const u = new SpeechSynthesisUtterance(chunks[i++])
-    if (v) u.voice = v
-    u.lang = v?.lang || lang
+    // Use the browser's default voice (clearest); only nudge the language.
+    u.lang = lang
     u.rate = 1.0
     u.pitch = 1.0
     u.onstart = () => {
