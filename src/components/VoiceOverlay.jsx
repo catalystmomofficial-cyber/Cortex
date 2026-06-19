@@ -251,6 +251,7 @@ export default function VoiceOverlay({ onClose }) {
 
         <div className="voice-debug">
           {`status:${sm.status} · ctx:${audioState()} · socket:${sm.socketState || '—'} · mic-frames:${sm.framesRef.current} · lvl:${hudLvl.toFixed(2)} · heard:${sm.transcript.length}`}
+          {sm.error ? ` · err:${sm.error}` : ''}
         </div>
       </div>
 

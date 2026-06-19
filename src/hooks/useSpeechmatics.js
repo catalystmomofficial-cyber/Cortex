@@ -19,6 +19,7 @@ export function useSpeechmatics() {
   const [socketState, setSocketState] = useState('')
 
   const clientRef = useRef(null)
+  const readyRef = useRef(false) // true only after RecognitionStarted
   const finalRef = useRef('')
   const framesRef = useRef(0)
   const levelRef = useRef(0)
@@ -48,6 +49,7 @@ export function useSpeechmatics() {
     sourceRef.current = null
     streamRef.current = null
     levelRef.current = 0
+    readyRef.current = false
     const client = clientRef.current
     if (client) {
       client.stopRecognition({ noTimeout: true }).catch(() => {})
@@ -76,6 +78,7 @@ export function useSpeechmatics() {
     setFinalText('')
     setPartialText('')
     framesRef.current = 0
+    readyRef.current = false
 
     const ctx = sharedAudioContext
     if (!ctx) {
@@ -103,9 +106,10 @@ export function useSpeechmatics() {
         let s = 0
         for (let i = 0; i < input.length; i++) s += input[i] * input[i]
         levelRef.current = Math.min(1, Math.sqrt(s / input.length) * 4)
-        // Forward PCM to Speechmatics once connected (copy — buffer is reused).
+        // Forward PCM to Speechmatics once the session is ready (copy — buffer
+        // is reused). Sending before RecognitionStarted closes the connection.
         const client = clientRef.current
-        if (client && client.socketState === 'open') {
+        if (client && readyRef.current && client.socketState === 'open') {
           client.sendAudio(new Float32Array(input).buffer)
         }
       }
@@ -171,6 +175,8 @@ export function useSpeechmatics() {
           max_delay: 1.5,
         },
       })
+      // Session acknowledged — now it's safe to stream audio.
+      readyRef.current = true
     } catch (e) {
       setError('Transcription could not start: ' + (e?.message || e))
     }
