@@ -71,3 +71,44 @@ export async function streamChat({ model, system, messages, onDelta, signal }) {
 
   return full
 }
+
+/**
+ * Ask Gemini for a single JSON object (non-streaming). Returns parsed JSON,
+ * or null on failure.
+ */
+export async function generateJSON({ system, messages }) {
+  const res = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system, messages, json: true }),
+  })
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const err = await res.json()
+      detail = err?.error || ''
+    } catch {
+      /* noop */
+    }
+    if (res.status === 500 && /not configured/i.test(detail)) throw new Error('NO_SERVER_KEY')
+    throw new Error(detail || `AI error ${res.status}`)
+  }
+  const { text } = await res.json()
+  if (!text) return null
+  // Strip accidental code fences, then parse.
+  const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    // Last resort: grab the outermost {...}.
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (m) {
+      try {
+        return JSON.parse(m[0])
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+}

@@ -9,6 +9,7 @@ export function buildSystemPrompt(state) {
     "You are Cortex, the user's sharp, private business advisor. You speak like an experienced operator and co-founder, not a corporate consultant.",
     'Be direct, concise, and practical. When speaking aloud, keep answers tight — a few sentences, no markdown, no bullet symbols.',
     `Respond in ${language}. If the user clearly writes or speaks in a different language, mirror their language instead.`,
+    "When the conversation produces concrete plans, goals, or next actions, briefly offer to organize them into their plan (they can tap “Organize into my plan” to file them into Goals, Today's One Thing, and the Weekly Pulse).",
     'You have full context on their business below. Reference their actual goals and ideas. Never invent facts you were not given.',
     '',
     '## Business context',
@@ -33,4 +34,27 @@ export function buildSystemPrompt(state) {
     for (const i of ideas.slice(0, 12)) lines.push(`- ${i.text}`)
   }
   return lines.join('\n')
+}
+
+// System instruction for turning a conversation into structured plan items.
+export function buildPlanExtractionPrompt() {
+  return [
+    'You convert a business conversation into structured planning items for the Cortex app.',
+    'Return ONLY a JSON object with this exact shape:',
+    '{',
+    '  "goals": [{ "title": string, "domain": "growth"|"finance"|"operations", "status": "on"|"risk"|"off"|"overdue", "win": string, "due": string }],',
+    '  "focus": string,',
+    '  "pulse": { "win": string, "blocker": string, "focus": string },',
+    '  "ideas": [string]',
+    '}',
+    'Rules:',
+    '- Only include items clearly implied by the conversation. If a section has nothing, use an empty array, or "" for focus, or null for pulse.',
+    '- "domain" must be growth, finance, or operations — choose the best fit.',
+    '- "status" defaults to "on" unless the conversation says otherwise.',
+    '- "due" is an ISO date (YYYY-MM-DD) only if a clear date was discussed, else "".',
+    '- "win" is a short success criterion for the goal, else "".',
+    '- "focus" is the single most important next action ("Today\'s One Thing"), else "".',
+    '- "pulse" only if a weekly review/check-in was discussed (win, blocker, next focus), else null.',
+    '- Keep all titles short and actionable. Do not invent facts.',
+  ].join('\n')
 }

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server.' })
   }
 
-  const { system, messages = [] } = req.body || {}
+  const { system, messages = [], json = false } = req.body || {}
 
   const contents = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -27,15 +27,46 @@ export default async function handler(req, res) {
       parts: [{ text: m.content }],
     }))
 
-  const body = {
-    contents,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
-  }
+  const generationConfig = { temperature: json ? 0.2 : 0.7, maxOutputTokens: json ? 2048 : 1200 }
+  if (json) generationConfig.responseMimeType = 'application/json'
+
+  const body = { contents, generationConfig }
   if (system) body.systemInstruction = { parts: [{ text: system }] }
   const payload = JSON.stringify(body)
 
   let lastStatus = 502
   let lastDetail = ''
+
+  // JSON mode: non-streaming, return a single parsed JSON blob.
+  if (json) {
+    try {
+      for (const model of MODELS) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+        let upstream
+        try {
+          upstream = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+          })
+        } catch (e) {
+          lastDetail = String(e?.message || e)
+          continue
+        }
+        if (upstream.ok) {
+          const data = await upstream.json()
+          const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || ''
+          res.setHeader('Cache-Control', 'no-store')
+          return res.status(200).json({ text })
+        }
+        lastStatus = upstream.status
+        lastDetail = await upstream.text().catch(() => '')
+      }
+      return res.status(502).json({ error: 'Gemini request failed.', status: lastStatus, detail: lastDetail })
+    } catch (err) {
+      return res.status(500).json({ error: 'Unexpected error talking to Gemini.', detail: String(err?.message || err) })
+    }
+  }
 
   try {
     for (const model of MODELS) {
