@@ -614,3 +614,34 @@ textarea {
   border-radius: 999px;
   white-space: nowrap;
 }
+
+/* Swipe-to-delete goal cards ---------------------------------------------- */
+.goal-swipe {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.goal-delete-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding-right: 26px;
+  background: linear-gradient(90deg, rgba(224, 122, 114, 0.25), var(--red));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius);
+}
+
+.goal-card-slide {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-elev); /* opaque so the red stays hidden until swiped */
+  will-change: transform;
+  touch-action: pan-y;
+}

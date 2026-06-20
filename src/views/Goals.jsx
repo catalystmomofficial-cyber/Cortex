@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { Plus, Target, Trash2, X, Check } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Plus, Target, Trash2, X, Check, Pencil } from 'lucide-react'
 import Header from '../components/Header'
 import { useStore, STATUS_META, DOMAINS } from '../store'
 
 const STATUS_ORDER = ['on', 'risk', 'off', 'overdue']
+const REVEAL = 84 // px the card slides to reveal Delete
 
 export default function Goals() {
   const { state, dispatch } = useStore()
@@ -54,6 +55,10 @@ export default function Goals() {
 
 function GoalCard({ goal, onEdit, dispatch }) {
   const meta = STATUS_META[goal.status]
+  const [offset, setOffset] = useState(0)
+  const [menu, setMenu] = useState(false)
+  const drag = useRef({ x: 0, y: 0, base: 0, moved: false, horizontal: false })
+  const longTimer = useRef(null)
 
   function cycleStatus(e) {
     e.stopPropagation()
@@ -61,29 +66,109 @@ function GoalCard({ goal, onEdit, dispatch }) {
     dispatch({ type: 'UPDATE_GOAL', id: goal.id, patch: { status: next } })
   }
 
+  function onStart(x, y) {
+    drag.current = { x, y, base: offset, moved: false, horizontal: false }
+    clearTimeout(longTimer.current)
+    longTimer.current = setTimeout(() => {
+      if (!drag.current.moved) {
+        setMenu(true)
+        setOffset(0)
+      }
+    }, 450)
+  }
+  function onMove(x, y) {
+    const d = drag.current
+    const dx = x - d.x
+    const dy = y - d.y
+    if (!d.horizontal && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+      d.horizontal = true
+      clearTimeout(longTimer.current)
+    }
+    if (d.horizontal) {
+      d.moved = true
+      setOffset(Math.max(-REVEAL, Math.min(0, d.base + dx)))
+    } else if (Math.abs(dy) > 10) {
+      clearTimeout(longTimer.current)
+    }
+  }
+  function onEnd() {
+    clearTimeout(longTimer.current)
+    if (drag.current.horizontal) {
+      setOffset((o) => (o < -REVEAL / 2 ? -REVEAL : 0))
+    }
+  }
+
+  function del() {
+    dispatch({ type: 'DELETE_GOAL', id: goal.id })
+  }
+
   return (
-    <div className="card" onClick={onEdit}>
-      <div className="row between">
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>{goal.title}</div>
-          {goal.win && (
-            <div className="faint" style={{ fontSize: 13, marginTop: 3 }}>
-              Win: {goal.win}
-            </div>
-          )}
+    <div className="goal-swipe">
+      <button className="goal-delete-bg" onClick={del} aria-label="Delete goal">
+        <Trash2 size={20} />
+        <span>Delete</span>
+      </button>
+      <div
+        className="card goal-card-slide"
+        style={{ transform: `translateX(${offset}px)`, transition: 'transform 0.2s ease' }}
+        onTouchStart={(e) => onStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => onMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={onEnd}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMenu(true)
+        }}
+        onClick={() => {
+          if (offset !== 0) setOffset(0) // tap closes an open swipe; no auto-edit
+        }}
+      >
+        <div className="row between">
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{goal.title}</div>
+            {goal.win && (
+              <div className="faint" style={{ fontSize: 13, marginTop: 3 }}>
+                Win: {goal.win}
+              </div>
+            )}
+          </div>
+          <button
+            className="chip"
+            onClick={cycleStatus}
+            style={{ color: meta.color, borderColor: 'transparent', background: 'var(--surface-strong)' }}
+          >
+            <span className={`status-dot ${meta.dot}`} />
+            {meta.label}
+          </button>
         </div>
-        <button
-          className="chip"
-          onClick={cycleStatus}
-          style={{ color: meta.color, borderColor: 'transparent', background: 'var(--surface-strong)' }}
-        >
-          <span className={`status-dot ${meta.dot}`} />
-          {meta.label}
-        </button>
+        {goal.due && (
+          <div className="faint" style={{ fontSize: 12, marginTop: 10 }}>
+            Due {new Date(goal.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </div>
+        )}
       </div>
-      {goal.due && (
-        <div className="faint" style={{ fontSize: 12, marginTop: 10 }}>
-          Due {new Date(goal.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+
+      {menu && (
+        <div className="sheet-backdrop" onClick={() => setMenu(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="faint" style={{ fontSize: 13, marginBottom: 6 }}>
+              {goal.title}
+            </div>
+            <button
+              className="menu-row"
+              onClick={() => {
+                setMenu(false)
+                onEdit()
+              }}
+            >
+              <Pencil size={17} /> Edit
+            </button>
+            <button className="menu-row" style={{ color: 'var(--red)' }} onClick={() => { setMenu(false); del() }}>
+              <Trash2 size={17} /> Delete
+            </button>
+            <button className="menu-row cancel" onClick={() => setMenu(false)}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
     </div>
