@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send, Sparkles, Trash2, ArrowUpRight, Mic, AudioLines, Wand2 } from 'lucide-react'
+import { Send, Sparkles, Trash2, ArrowUpRight, Mic, AudioLines, Wand2, X, Pencil, Copy } from 'lucide-react'
 import { useStore } from '../store'
 import { streamChat } from '../lib/gemini'
 import { buildSystemPrompt } from '../lib/prompt'
@@ -33,6 +33,44 @@ export default function Advisor({ onVoice, onNavigate }) {
   const [error, setError] = useState('')
 
   const { organize, organizing, plan, setPlan, planError, applyPlan } = usePlanOrganizer()
+
+  // Collapsible organize control + long-press message menu.
+  const [orgOpen, setOrgOpen] = useState(true)
+  const [menuMsg, setMenuMsg] = useState(null) // { index, message }
+  const [copied, setCopied] = useState(false)
+  const pressTimer = useRef(null)
+
+  const lastUserIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === 'user') return i
+    return -1
+  })()
+
+  function startPress(index) {
+    clearTimeout(pressTimer.current)
+    pressTimer.current = setTimeout(() => setMenuMsg({ index, message: messages[index] }), 450)
+  }
+  function cancelPress() {
+    clearTimeout(pressTimer.current)
+  }
+
+  function copyMessage(text) {
+    try {
+      navigator.clipboard?.writeText(text)
+    } catch {
+      /* noop */
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
+    setMenuMsg(null)
+  }
+
+  function editMessage(index) {
+    // Edit the last user turn: pull it back into the composer and drop it (and
+    // its reply) so the edited version starts a fresh turn.
+    setInput(messages[index].content)
+    dispatch({ type: 'SET_ADVISOR_MESSAGES', messages: messages.slice(0, index) })
+    setMenuMsg(null)
+  }
 
   const threadRef = useRef(null)
   const abortRef = useRef(null)
@@ -156,7 +194,19 @@ export default function Advisor({ onVoice, onNavigate }) {
             {messages.map((m, i) => (
               <div key={i} className={`bubble-wrap ${m.role}`}>
                 {m.role === 'user' && m.via === 'voice' && <span className="bubble-tag">voice</span>}
-                <div className={`bubble ${m.role}`}>
+                <div
+                  className={`bubble ${m.role}`}
+                  onTouchStart={() => startPress(i)}
+                  onTouchEnd={cancelPress}
+                  onTouchMove={cancelPress}
+                  onMouseDown={() => startPress(i)}
+                  onMouseUp={cancelPress}
+                  onMouseLeave={cancelPress}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMenuMsg({ index: i, message: m })
+                  }}
+                >
                   {m.role === 'assistant' ? renderText(m.content) : m.content}
                 </div>
               </div>
@@ -187,11 +237,36 @@ export default function Advisor({ onVoice, onNavigate }) {
         )}
       </div>
 
-      {messages.length > 0 && (
-        <button className="organize-btn" onClick={organize} disabled={organizing}>
-          <Wand2 size={16} />
-          {organizing ? 'Organizing…' : 'Organize into my plan'}
-        </button>
+      {messages.length > 0 && orgOpen && (
+        <div className="organize-bar">
+          <button className="organize-btn" onClick={organize} disabled={organizing}>
+            <Wand2 size={16} />
+            {organizing ? 'Organizing…' : 'Organize into my plan'}
+          </button>
+          <button className="organize-x" aria-label="Collapse" onClick={() => setOrgOpen(false)}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {copied && <div className="toast">Copied</div>}
+
+      {menuMsg && (
+        <div className="sheet-backdrop" onClick={() => setMenuMsg(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            {menuMsg.message.role === 'user' && menuMsg.index === lastUserIndex && (
+              <button className="menu-row" onClick={() => editMessage(menuMsg.index)}>
+                <Pencil size={17} /> Edit
+              </button>
+            )}
+            <button className="menu-row" onClick={() => copyMessage(menuMsg.message.content)}>
+              <Copy size={17} /> Copy text
+            </button>
+            <button className="menu-row cancel" onClick={() => setMenuMsg(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {plan && (
@@ -211,6 +286,15 @@ export default function Advisor({ onVoice, onNavigate }) {
               aria-label={dictation.listening ? 'Stop dictation' : 'Dictate'}
             >
               <Mic size={19} />
+            </button>
+          )}
+          {messages.length > 0 && !orgOpen && (
+            <button
+              className="composer-icon-btn organize-mini"
+              onClick={() => setOrgOpen(true)}
+              aria-label="Organize into my plan"
+            >
+              <Wand2 size={19} />
             </button>
           )}
           <textarea

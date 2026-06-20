@@ -28,6 +28,9 @@
   white-space: pre-wrap;
   word-wrap: break-word;
   animation: fade-up 0.22s ease;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .bubble.user {
@@ -234,12 +237,18 @@
 }
 
 /* Organize into my plan -------------------------------------------------- */
-.organize-btn {
+.organize-bar {
   position: fixed;
   bottom: calc(124px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.organize-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -255,11 +264,69 @@
 }
 
 .organize-btn:active {
-  transform: translateX(-50%) scale(0.96);
+  transform: scale(0.96);
 }
 
 .organize-btn:disabled {
   opacity: 0.6;
+}
+
+.organize-x {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.organize-mini {
+  color: var(--gold-bright) !important;
+  background: rgba(216, 180, 106, 0.12) !important;
+}
+
+/* Long-press message menu */
+.menu-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 6px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.menu-row:last-child {
+  border-bottom: none;
+}
+
+.menu-row.cancel {
+  justify-content: center;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.toast {
+  position: fixed;
+  bottom: calc(150px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  animation: fade-up 0.2s ease;
 }
 
 .plan-section {
