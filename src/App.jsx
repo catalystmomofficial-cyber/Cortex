@@ -31,7 +31,7 @@ export default function App() {
       {view === 'pulse' && <Pulse onNavigate={go} />}
       {view === 'goals' && <Goals />}
       {view === 'advisor' && <Advisor onNavigate={go} onVoice={openVoice} />}
-      {view === 'capture' && <Capture onVoice={openVoice} />}
+      {view === 'capture' && <Capture />}
       {view === 'settings' && <Settings onNavigate={go} />}
 
       <nav className="nav">

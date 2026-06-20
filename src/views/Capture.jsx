@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Lightbulb, Plus, Trash2, Mic } from 'lucide-react'
 import Header from '../components/Header'
 import { useStore } from '../store'
+import { useDictation } from '../hooks/useDictation'
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000)
@@ -14,14 +15,31 @@ function timeAgo(ts) {
   return `${d}d ago`
 }
 
-export default function Capture({ onVoice }) {
+export default function Capture() {
   const { state, dispatch } = useStore()
   const [text, setText] = useState('')
 
+  // Dictation: speak to fill the idea box, then edit/save like typing.
+  const baseRef = useRef('')
+  const dictation = useDictation((t) => {
+    setText((baseRef.current ? baseRef.current + ' ' : '') + t)
+  }, state.settings.language || 'en-US')
+
+  function toggleDictation() {
+    if (dictation.listening) {
+      dictation.stop()
+    } else {
+      baseRef.current = text.trim()
+      dictation.start()
+    }
+  }
+
   function add() {
+    if (dictation.listening) dictation.stop()
     if (!text.trim()) return
     dispatch({ type: 'ADD_IDEA', text })
     setText('')
+    baseRef.current = ''
   }
 
   return (
@@ -42,13 +60,21 @@ export default function Capture({ onVoice }) {
           style={{ border: 'none', background: 'transparent', padding: 0 }}
         />
         <div className="row between" style={{ marginTop: 12 }}>
-          <button
-            className="chip"
-            onClick={onVoice}
-            style={{ color: 'var(--gold-bright)', borderColor: 'var(--border-strong)' }}
-          >
-            <Mic size={14} /> Speak instead
-          </button>
+          {dictation.supported ? (
+            <button
+              className="chip"
+              onClick={toggleDictation}
+              style={{
+                color: dictation.listening ? '#2a1700' : 'var(--gold-bright)',
+                borderColor: dictation.listening ? 'transparent' : 'var(--border-strong)',
+                background: dictation.listening ? 'var(--gold-grad)' : 'transparent',
+              }}
+            >
+              <Mic size={14} /> {dictation.listening ? 'Listening…' : 'Dictate'}
+            </button>
+          ) : (
+            <span />
+          )}
           <button className="btn btn-primary" onClick={add} style={{ padding: '10px 16px' }}>
             <Plus size={16} /> Capture
           </button>

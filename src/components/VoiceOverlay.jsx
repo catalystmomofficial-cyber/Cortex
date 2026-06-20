@@ -19,7 +19,7 @@ const SUGGESTIONS = [
 // Conversational voice advisor — listen, think, speak — with the gold orb
 // reacting throughout (like ChatGPT / Gemini voice mode).
 export default function VoiceOverlay({ onClose }) {
-  const { state } = useStore()
+  const { state, dispatch } = useStore()
   const org = (state.profile.company || '').trim() || 'Cortex'
   const lang = state.settings.language || 'en-US'
   const askRef = useRef(null)
@@ -33,7 +33,6 @@ export default function VoiceOverlay({ onClose }) {
   const modeRef = useRef('idle')
   const speakBumpRef = useRef(0)
   const transcriptRef = useRef('')
-  const historyRef = useRef([])
   const abortRef = useRef(null)
 
   useEffect(() => {
@@ -124,8 +123,10 @@ export default function VoiceOverlay({ onClose }) {
     cancelSpeech()
     sm.stop()
 
-    const msgs = [...historyRef.current, { role: 'user', content }]
-    historyRef.current = msgs
+    // Share one conversation thread with the Advisor chat: read prior messages
+    // from the store and append the voice turn so it shows up there too.
+    const msgs = [...state.advisor.messages, { role: 'user', content }]
+    dispatch({ type: 'SET_ADVISOR_MESSAGES', messages: msgs })
     setAnswer('')
     setMode('thinking')
 
@@ -142,7 +143,7 @@ export default function VoiceOverlay({ onClose }) {
           setAnswer(acc)
         },
       })
-      historyRef.current = [...msgs, { role: 'assistant', content: acc }]
+      dispatch({ type: 'SET_ADVISOR_MESSAGES', messages: [...msgs, { role: 'assistant', content: acc }] })
       setMode('speaking')
       speak(acc, {
         lang,
