@@ -638,6 +638,22 @@ textarea {
   border-radius: var(--radius);
 }
 
+.goal-edit-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  padding-left: 26px;
+  background: linear-gradient(90deg, var(--gold-deep), rgba(216, 180, 106, 0.25));
+  color: #2a1c05;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius);
+}
+
 .goal-card-slide {
   position: relative;
   z-index: 1;

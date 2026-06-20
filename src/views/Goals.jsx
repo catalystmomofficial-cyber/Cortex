@@ -86,7 +86,7 @@ function GoalCard({ goal, onEdit, dispatch }) {
     }
     if (d.horizontal) {
       d.moved = true
-      setOffset(Math.max(-REVEAL, Math.min(0, d.base + dx)))
+      setOffset(Math.max(-REVEAL, Math.min(REVEAL, d.base + dx)))
     } else if (Math.abs(dy) > 10) {
       clearTimeout(longTimer.current)
     }
@@ -94,7 +94,7 @@ function GoalCard({ goal, onEdit, dispatch }) {
   function onEnd() {
     clearTimeout(longTimer.current)
     if (drag.current.horizontal) {
-      setOffset((o) => (o < -REVEAL / 2 ? -REVEAL : 0))
+      setOffset((o) => (o < -REVEAL / 2 ? -REVEAL : o > REVEAL / 2 ? REVEAL : 0))
     }
   }
 
@@ -104,6 +104,17 @@ function GoalCard({ goal, onEdit, dispatch }) {
 
   return (
     <div className="goal-swipe">
+      <button
+        className="goal-edit-bg"
+        onClick={() => {
+          setOffset(0)
+          onEdit()
+        }}
+        aria-label="Edit goal"
+      >
+        <Pencil size={20} />
+        <span>Edit</span>
+      </button>
       <button className="goal-delete-bg" onClick={del} aria-label="Delete goal">
         <Trash2 size={20} />
         <span>Delete</span>
