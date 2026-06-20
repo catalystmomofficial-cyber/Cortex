@@ -45,7 +45,7 @@ export default function Settings({ onNavigate }) {
           label="Company name"
           value={state.profile.company}
           onChange={(v) => setProfile({ company: v })}
-          placeholder="e.g. Acme Studio"
+          placeholder="e.g. Acme Co."
         />
         <Field
           label="What do you sell or offer?"
