@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Mic, MicOff } from 'lucide-react'
+import { X, Mic, MicOff, Wand2, Check } from 'lucide-react'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition'
+import { usePlanOrganizer } from '../hooks/usePlanOrganizer'
 import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
 import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
 import { resumeAudio } from '../lib/audio'
 import VoiceOrb from './VoiceOrb'
+import PlanReview from './PlanReview'
 import './VoiceOverlay.css'
 
 const SUGGESTIONS = [
@@ -24,6 +26,9 @@ export default function VoiceOverlay({ onClose }) {
   const lang = state.settings.language || 'en-US'
   const askRef = useRef(null)
   const sm = useVoiceRecognition(lang)
+  const { organize, organizing, plan, setPlan, planError, applyPlan } = usePlanOrganizer()
+  const [organized, setOrganized] = useState(false)
+  const hasConversation = state.advisor.messages.length > 0
 
   const [mode, setMode] = useState('idle') // idle | listening | thinking | speaking
   const [answer, setAnswer] = useState('')
@@ -125,7 +130,7 @@ export default function VoiceOverlay({ onClose }) {
 
     // Share one conversation thread with the Advisor chat: read prior messages
     // from the store and append the voice turn so it shows up there too.
-    const msgs = [...state.advisor.messages, { role: 'user', content }]
+    const msgs = [...state.advisor.messages, { role: 'user', content, via: 'voice' }]
     dispatch({ type: 'SET_ADVISOR_MESSAGES', messages: msgs })
     setAnswer('')
     setMode('thinking')
@@ -256,6 +261,18 @@ export default function VoiceOverlay({ onClose }) {
         )}
 
         {error && <div className="voice-error">{error}</div>}
+        {planError && <div className="voice-error">{planError}</div>}
+
+        {showPrompts && hasConversation && (
+          <button
+            className="voice-organize"
+            onClick={organize}
+            disabled={organizing}
+          >
+            {organized ? <Check size={16} /> : <Wand2 size={16} />}
+            {organizing ? 'Organizing…' : organized ? 'Added to your plan' : 'Organize into my plan'}
+          </button>
+        )}
       </div>
 
       <div className={`voice-suggestions ${showPrompts ? '' : 'hidden'}`}>
@@ -274,6 +291,19 @@ export default function VoiceOverlay({ onClose }) {
           </button>
         ))}
       </div>
+
+      {plan && (
+        <PlanReview
+          plan={plan}
+          onClose={() => setPlan(null)}
+          onApply={(sel) => {
+            applyPlan(sel, () => {
+              setOrganized(true)
+              setTimeout(() => setOrganized(false), 2500)
+            })
+          }}
+        />
+      )}
     </div>
   )
 }

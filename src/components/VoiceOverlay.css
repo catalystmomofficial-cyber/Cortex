@@ -291,3 +291,25 @@
   background: rgba(224, 122, 114, 0.12);
   border-color: rgba(224, 122, 114, 0.3);
 }
+
+.voice-organize {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold-bright);
+  background: rgba(216, 180, 106, 0.12);
+  border: 1px solid var(--border-strong);
+  transition: transform 0.12s ease, opacity 0.18s ease;
+}
+
+.voice-organize:active {
+  transform: scale(0.97);
+}
+
+.voice-organize:disabled {
+  opacity: 0.6;
+}

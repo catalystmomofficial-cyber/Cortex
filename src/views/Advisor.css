@@ -333,3 +333,28 @@
   color: var(--text-dim);
   margin-top: 2px;
 }
+
+/* Message wrapper + voice tag (text, no icon) */
+.bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 86%;
+}
+.bubble-wrap.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.bubble-wrap.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.bubble-wrap .bubble {
+  max-width: 100%;
+}
+.bubble-tag {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 4px 3px;
+}
