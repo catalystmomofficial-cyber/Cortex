@@ -3,6 +3,9 @@
 // shared token server-side. If VOXCPM_URL isn't set, the client falls back to
 // the free browser voice.
 
+// Allow longer execution: VoxCPM's first (cold-start) request can take a while.
+export const config = { maxDuration: 60 }
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')

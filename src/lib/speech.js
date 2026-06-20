@@ -84,8 +84,14 @@ export function speak(text, opts = {}) {
 // VoxCPM (or any server TTS via /api/tts) — plays returned audio; falls back to
 // the browser voice on any failure so a demo never goes silent.
 async function speakServer(text, { lang = 'en-US', onStart, onEnd } = {}) {
+  // Stop anything currently playing WITHOUT bumping the session, then claim it.
+  if (isSpeechSupported()) speechSynthesis.cancel()
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio.src = ''
+    currentAudio = null
+  }
   const mySession = ++speakSession
-  cancelSpeech()
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
