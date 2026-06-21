@@ -50,6 +50,20 @@ export function cancelSpeech() {
   stopServerAudio()
 }
 
+// Fire-and-forget: wake the VoxCPM GPU so the first real reply is likely warm.
+let warmed = 0
+export function warmTTS() {
+  if (!USE_VOXCPM) return
+  const now = Date.now()
+  if (now - warmed < 60000) return // don't spam; warm at most once a minute
+  warmed = now
+  fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'Hi', language: 'en' }),
+  }).catch(() => {})
+}
+
 // Split into sentence-ish chunks (<=~200 chars). Chrome stops speaking a single
 // long utterance after ~15s, so we queue shorter ones to avoid the cutoff.
 function chunkText(text) {

@@ -26,7 +26,7 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "voxcpm", "soundfile", "fastapi[standard]", "huggingface_hub"
 )
 
-MODEL_ID = "openbmb/VoxCPM2"
+MODEL_ID = "openbmb/VoxCPM-0.5B"  # small + fast (1.6 GB) → quick cold start
 
 
 @app.cls(
