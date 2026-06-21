@@ -5,7 +5,7 @@ import { usePlanOrganizer } from '../hooks/usePlanOrganizer'
 import { useStore } from '../store'
 import { buildSystemPrompt } from '../lib/prompt'
 import { streamChat } from '../lib/gemini'
-import { speak, cancelSpeech, unlockSpeech, warmTTS } from '../lib/speech'
+import { speak, cancelSpeech, unlockSpeech } from '../lib/speech'
 import { resumeAudio } from '../lib/audio'
 import VoiceOrb from './VoiceOrb'
 import PlanReview from './PlanReview'
@@ -55,10 +55,8 @@ export default function VoiceOverlay({ onClose }) {
     }
   }, [sm.status, sm.error])
 
-  // Tear everything down on close. Warm the VoxCPM GPU on open so the first
-  // spoken reply is more likely to come back in time.
+  // Tear everything down on close.
   useEffect(() => {
-    warmTTS()
     return () => {
       sm.stop()
       cancelSpeech()
