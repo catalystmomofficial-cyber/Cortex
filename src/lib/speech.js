@@ -104,11 +104,22 @@ async function speakServer(text, { lang = 'en-US', onStart, onEnd } = {}) {
   }
 
   try {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, language: lang }),
-    })
+    const controller = new AbortController()
+    // VoxCPM cold start can take a while; don't make the user wait in silence.
+    // If it's slow, fall back to the browser voice fast (the GPU keeps warming
+    // in the background, so the next reply uses VoxCPM).
+    const timer = setTimeout(() => controller.abort(), 10000)
+    let res
+    try {
+      res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, language: lang }),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
     if (!res.ok) throw new Error('tts ' + res.status)
     const arr = await res.arrayBuffer()
     if (mySession !== speakSession) return
