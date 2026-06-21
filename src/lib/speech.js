@@ -3,7 +3,7 @@
 // the browser's DEFAULT voice — it's the clearest across devices. (A nicer
 // dedicated voice will come with a proper TTS like Piper later.)
 
-
+import { sharedAudioContext, resumeAudio } from './audio'
 
 export function isSpeechSupported() {
   return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'
@@ -26,20 +26,28 @@ export function unlockSpeech() {
 
 // Bumping the session supersedes/cancels any in-flight chunk queue.
 let speakSession = 0
-let currentAudio = null
+let currentSource = null // Web Audio source playing server TTS
 
 // Use the VoxCPM server voice when enabled; otherwise the free browser voice.
 const USE_VOXCPM =
   import.meta.env.VITE_VOXCPM === '1' || import.meta.env.VITE_VOXCPM === 'true'
 
+function stopServerAudio() {
+  if (currentSource) {
+    try {
+      currentSource.onended = null
+      currentSource.stop()
+    } catch {
+      /* noop */
+    }
+    currentSource = null
+  }
+}
+
 export function cancelSpeech() {
   speakSession++
   if (isSpeechSupported()) speechSynthesis.cancel()
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio.src = ''
-    currentAudio = null
-  }
+  stopServerAudio()
 }
 
 // Split into sentence-ish chunks (<=~200 chars). Chrome stops speaking a single
@@ -86,36 +94,43 @@ export function speak(text, opts = {}) {
 async function speakServer(text, { lang = 'en-US', onStart, onEnd } = {}) {
   // Stop anything currently playing WITHOUT bumping the session, then claim it.
   if (isSpeechSupported()) speechSynthesis.cancel()
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio.src = ''
-    currentAudio = null
-  }
+  stopServerAudio()
   const mySession = ++speakSession
+
+  const ctx = sharedAudioContext
+  if (!ctx) {
+    speakBrowser(text, { lang, onStart, onEnd })
+    return
+  }
+
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language: lang }),
     })
-    if (!res.ok) throw new Error('tts')
-    const blob = await res.blob()
+    if (!res.ok) throw new Error('tts ' + res.status)
+    const arr = await res.arrayBuffer()
     if (mySession !== speakSession) return
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    currentAudio = audio
-    audio.onplay = () => onStart?.()
-    audio.onended = () => {
-      URL.revokeObjectURL(url)
-      if (currentAudio === audio) currentAudio = null
+
+    // Decode + play through the shared (user-unlocked) audio engine, which
+    // avoids autoplay blocks that bite a plain <audio>.play().
+    await resumeAudio()
+    const buffer = await ctx.decodeAudioData(arr.slice(0))
+    if (mySession !== speakSession) return
+
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    src.connect(ctx.destination)
+    currentSource = src
+    src.onended = () => {
+      if (currentSource === src) currentSource = null
       onEnd?.()
     }
-    audio.onerror = () => {
-      URL.revokeObjectURL(url)
-      onEnd?.()
-    }
-    await audio.play()
+    onStart?.()
+    src.start()
   } catch {
+    // VoxCPM unavailable/slow or undecodable → never go silent.
     speakBrowser(text, { lang, onStart, onEnd })
   }
 }
