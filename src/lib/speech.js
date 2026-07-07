@@ -3,6 +3,8 @@
 // the browser's DEFAULT voice — it's the clearest across devices. (A nicer
 // dedicated voice will come with a proper TTS like Piper later.)
 
+import { sharedAudioContext, resumeAudio } from './audio'
+
 export function isSpeechSupported() {
   return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'
 }
@@ -24,23 +26,21 @@ export function unlockSpeech() {
 
 // Bumping the session supersedes/cancels any in-flight chunk queue.
 let speakSession = 0
-let currentAudio = null // HTMLAudioElement playing server TTS
+let currentSource = null // Web Audio source playing server TTS
 
 // Use the VoxCPM server voice when enabled; otherwise the free browser voice.
 const USE_VOXCPM =
   import.meta.env.VITE_VOXCPM === '1' || import.meta.env.VITE_VOXCPM === 'true'
 
 function stopServerAudio() {
-  if (currentAudio) {
+  if (currentSource) {
     try {
-      currentAudio.onended = null
-      currentAudio.onerror = null
-      currentAudio.pause()
-      if (currentAudio.src) URL.revokeObjectURL(currentAudio.src)
+      currentSource.onended = null
+      currentSource.stop()
     } catch {
       /* noop */
     }
-    currentAudio = null
+    currentSource = null
   }
 }
 
@@ -89,9 +89,12 @@ export function speak(text, opts = {}) {
   speakBrowser(text, opts)
 }
 
-// VoxCPM (or any server TTS via /api/tts) — plays returned audio with a plain
-// <audio> element; falls back to the browser voice on ANY failure (slow cold
-// start, non-200, decode/play error) so the advisor is never silent.
+// Server TTS via /api/tts (Kokoro/VoxCPM) — plays the returned audio through the
+// shared AudioContext that was unlocked on the user's tap. Web Audio is immune
+// to the autoplay block that rejects a plain <audio>.play() called seconds after
+// the gesture (the reply streams in first). Falls back to the browser voice on
+// ANY failure — slow cold start, non-200, empty/undecodable body, or a context
+// that never resumed — so the advisor is never silent.
 async function speakServer(text, opts = {}) {
   const { lang = 'en-US', onStart, onEnd } = opts
   // Stop anything currently playing WITHOUT bumping the session, then claim it.
@@ -108,8 +111,8 @@ async function speakServer(text, opts = {}) {
 
   try {
     const controller = new AbortController()
-    // VoxCPM cold start can take minutes on free tier; don't wait in silence.
-    // If it's slow, fall back to the browser voice fast.
+    // Cold start can be slow; don't wait in silence — fall back to the browser
+    // voice fast (the GPU/CPU keeps warming, so the next reply uses the server).
     const timer = setTimeout(() => controller.abort(), 8000)
     let res
     try {
@@ -123,38 +126,34 @@ async function speakServer(text, opts = {}) {
       clearTimeout(timer)
     }
     if (!res.ok) throw new Error('tts ' + res.status)
-    const blob = await res.blob()
+    const arr = await res.arrayBuffer()
     if (mySession !== speakSession) return
-    if (!blob.size) throw new Error('empty audio')
+    if (!arr.byteLength) throw new Error('empty audio')
 
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    currentAudio = audio
-    let ended = false
-    audio.onended = () => {
-      ended = true
-      if (currentAudio === audio) {
-        URL.revokeObjectURL(url)
-        currentAudio = null
-      }
+    const ctx = sharedAudioContext
+    if (!ctx) throw new Error('no audio context')
+    // Resume the context (it was unlocked on the tap). If it still isn't
+    // running, Web Audio would play silently — use the browser voice instead.
+    await resumeAudio()
+    if (mySession !== speakSession) return
+    if (ctx.state !== 'running') throw new Error('audio context suspended')
+
+    const buffer = await ctx.decodeAudioData(arr.slice(0))
+    if (mySession !== speakSession) return
+
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    src.connect(ctx.destination)
+    currentSource = src
+    src.onended = () => {
+      if (currentSource === src) currentSource = null
       onEnd?.()
     }
-    audio.onerror = () => {
-      if (ended) return
-      URL.revokeObjectURL(url)
-      if (currentAudio === audio) currentAudio = null
-      fallback()
-    }
     onStart?.()
-    // play() can reject (autoplay policy / not allowed) → fall back to browser.
-    audio.play().catch(() => {
-      if (ended) return
-      URL.revokeObjectURL(url)
-      if (currentAudio === audio) currentAudio = null
-      fallback()
-    })
+    src.start()
   } catch {
-    // VoxCPM unavailable/slow/non-200 → never go silent.
+    // Server slow/unavailable, undecodable audio, or a suspended context →
+    // never go silent.
     fallback()
   }
 }
