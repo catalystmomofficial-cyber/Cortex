@@ -63,6 +63,8 @@ class TTS:
             return Response(status_code=400)
         wav = np.concatenate(chunks)
 
+        # 16-bit PCM WAV — the one format every browser's <audio> can play.
+        # (Kokoro emits float32; a float WAV is silent in Safari / HTMLAudio.)
         buf = io.BytesIO()
-        sf.write(buf, wav, SAMPLE_RATE, format="WAV")
+        sf.write(buf, wav, SAMPLE_RATE, format="WAV", subtype="PCM_16")
         return Response(content=buf.getvalue(), media_type="audio/wav")
