@@ -1,9 +1,21 @@
-# Premium voice with VoxCPM (free, self-hostable)
+# Premium voice for Cortex (free, self-hostable)
 
 Cortex speaks the advisor's replies. By default it uses the **free browser
-voice**. To use **VoxCPM** (open Apache-2.0 TTS, ElevenLabs-class, multilingual
-incl. English + Tagalog, voice cloning), run it on a GPU endpoint and point
-Cortex at it. The browser voice stays as automatic fallback.
+voice**. To use a nicer voice, run one on a Modal endpoint and point Cortex at
+it via `VOXCPM_URL`. The browser voice stays as automatic fallback.
+
+Two hosted options, same `/api/tts` contract (so switching is just a URL swap):
+
+- **Kokoro — `server/kokoro_modal.py` (recommended).** The "Jessica" voice from
+  Voicebox. Tiny 82M model, **CPU-fast, no GPU bill, seconds-not-minutes cold
+  start.** English. Deploy it and set `VOXCPM_URL` to its URL — nothing else
+  changes (`VOXCPM_TOKEN`, `VITE_VOXCPM=1` stay as-is).
+- **VoxCPM — `server/voxcpm_modal.py`.** Multilingual incl. **Tagalog**, voice
+  cloning, but needs a **GPU** and has a multi-minute cold start on free tier.
+  Use only if you need Tagalog.
+
+Everything below describes the VoxCPM (GPU) path; for Kokoro just swap
+`voxcpm_modal.py` → `kokoro_modal.py` in the deploy command.
 
 ## Recommended host: Modal (free for personal/demo use)
 
