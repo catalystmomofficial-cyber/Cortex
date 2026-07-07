@@ -33,7 +33,7 @@ SAMPLE_RATE = 24000   # Kokoro outputs 24 kHz
 
 @app.cls(
     image=image,
-    scaledown_window=300,  # stay warm 5 min after a request, then scale to zero
+    scaledown_window=1800,  # stay warm 30 min after a request, then scale to zero
     secrets=[modal.Secret.from_name("voxcpm")],  # reuse the existing token secret
 )
 class TTS:
