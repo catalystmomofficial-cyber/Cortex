@@ -1,17 +1,17 @@
-# Cortex voice server on Modal — NVIDIA Magpie TTS first, Kokoro fallback.
+# Cortex voice server on Modal — NVIDIA Magpie TTS first, Kokoro (Jessica) as an
+# instant fallback that can never hang or go silent.
 #
-# Primary: NVIDIA's hosted Magpie TTS Multilingual (free API credits from
-# build.nvidia.com; gRPC-only, which is why this lives here in Python and not
-# in the Vercel Node function). Fallback: local Kokoro (af_heart), lazy-loaded
-# on first use so cold starts stay at a few seconds instead of a model load.
-# Same contract as always ({text, language, token} -> audio/wav bytes), same
-# app name, same URL — no Vercel changes needed.
+# Kokoro is loaded eagerly at container start (it's tiny), so the fallback is
+# always ready. Magpie is attempted first but capped at a few seconds — if it's
+# slow, errors, or is misconfigured, Jessica speaks immediately instead. Every
+# Magpie failure is logged so we can see why. Same contract/URL as always:
+# {text, language, token} -> audio/wav bytes.
 #
-# One-time setup (the NVIDIA key stays out of the repo, in a Modal secret):
-#   python3 -m modal secret create nvidia NVIDIA_API_KEY=<your key from build.nvidia.com>
-# Deploy:
+# Setup (NVIDIA key stays in a Modal secret, not the repo):
+#   python3 -m modal secret create nvidia NVIDIA_API_KEY=<key> --force
 #   python3 -m modal deploy server/kokoro_modal.py
 
+import concurrent.futures
 import io
 import os
 import wave
@@ -30,12 +30,13 @@ image = (
     )
 )
 
-# NVIDIA Magpie TTS Multilingual on build.nvidia.com (hosted NIM).
+# NVIDIA Magpie TTS Multilingual on build.nvidia.com (hosted NIM, gRPC).
 MAGPIE_FUNCTION_ID = "877104f7-e885-42b9-8de8-f6e4c6303969"
 MAGPIE_VOICE = "Magpie-Multilingual.EN-US.Sofia"  # warm female EN voice
 MAGPIE_RATE = 44100
+MAGPIE_TIMEOUT_S = 6  # never let Magpie hang the reply — fall back to Jessica
 
-# Kokoro fallback — "Jessica", the backup voice if NVIDIA Magpie is unavailable.
+# Kokoro fallback — "Jessica", loaded eagerly so it's always instant.
 KOKORO_VOICE = "af_jessica"
 KOKORO_LANG = "a"  # 'a' = American English (matches the af_ voices)
 KOKORO_RATE = 24000
@@ -51,8 +52,11 @@ KOKORO_RATE = 24000
 )
 class TTS:
     @modal.enter()
-    def setup(self):
-        self.kokoro = None  # lazy — only loaded if NVIDIA fails
+    def load(self):
+        from kokoro import KPipeline
+
+        # Eager — the fallback must be ready the instant Magpie misses.
+        self.kokoro = KPipeline(lang_code=KOKORO_LANG)
 
     def _magpie(self, text):
         import riva.client
@@ -83,14 +87,19 @@ class TTS:
             w.writeframes(resp.audio)
         return buf.getvalue()
 
-    def _kokoro_speak(self, text):
+    def _magpie_safe(self, text):
+        """Try Magpie, but never hang and never crash the request."""
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                return ex.submit(self._magpie, text).result(timeout=MAGPIE_TIMEOUT_S)
+        except Exception as e:  # timeout, auth, bad voice name, network — anything
+            print("Magpie TTS failed, using Kokoro fallback:", repr(e))
+            return None
+
+    def _kokoro(self, text):
         import numpy as np
         import soundfile as sf
 
-        if self.kokoro is None:
-            from kokoro import KPipeline
-
-            self.kokoro = KPipeline(lang_code=KOKORO_LANG)
         chunks = [np.asarray(a) for _, _, a in self.kokoro(text, voice=KOKORO_VOICE)]
         if not chunks:
             return None
@@ -113,12 +122,9 @@ class TTS:
 
         wav = None
         if os.environ.get("NVIDIA_API_KEY"):
-            try:
-                wav = self._magpie(text)
-            except Exception:
-                wav = None  # NVIDIA down/limited → Kokoro takes over
+            wav = self._magpie_safe(text)
         if wav is None:
-            wav = self._kokoro_speak(text)
+            wav = self._kokoro(text)
         if wav is None:
             return Response(status_code=500)
         return Response(content=wav, media_type="audio/wav")
