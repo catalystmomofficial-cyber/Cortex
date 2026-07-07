@@ -26,8 +26,8 @@ image = (
     .pip_install("kokoro>=0.9.2", "soundfile", "numpy", "fastapi[standard]")
 )
 
-VOICE = "af_jessica"  # the "Jessica" American-English voice from Voicebox
-LANG = "a"            # 'a' = American English (matches the af_ voices)
+VOICE = "af_heart"  # Kokoro's top-graded voice — warm, rich American female
+LANG = "a"          # 'a' = American English (matches the af_ voices)
 SAMPLE_RATE = 24000   # Kokoro outputs 24 kHz
 
 
