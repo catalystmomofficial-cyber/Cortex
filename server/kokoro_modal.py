@@ -35,9 +35,9 @@ MAGPIE_FUNCTION_ID = "877104f7-e885-42b9-8de8-f6e4c6303969"
 MAGPIE_VOICE = "Magpie-Multilingual.EN-US.Sofia"  # warm female EN voice
 MAGPIE_RATE = 44100
 
-# Kokoro fallback.
-KOKORO_VOICE = "af_heart"  # Kokoro's top-graded voice — warm, rich female
-KOKORO_LANG = "a"          # 'a' = American English (matches the af_ voices)
+# Kokoro fallback — "Jessica", the backup voice if NVIDIA Magpie is unavailable.
+KOKORO_VOICE = "af_jessica"
+KOKORO_LANG = "a"  # 'a' = American English (matches the af_ voices)
 KOKORO_RATE = 24000
 
 
