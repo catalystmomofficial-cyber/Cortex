@@ -19,16 +19,27 @@ import modal
 
 app = modal.App("kokoro-tts")
 
+VOICE = "af_jessica"  # "Jessica" — warm American-English female
+LANG = "a"            # 'a' = American English (matches the af_ voices)
+RATE = 24000          # Kokoro outputs 24 kHz
+
+
+def _bake_model():
+    # Runs at image BUILD time so the Kokoro model + voice are baked into the
+    # image — cold starts then load from local disk (~8s) instead of downloading
+    # (~25s), which was making the first reply miss the client timeout.
+    from kokoro import KPipeline
+
+    list(KPipeline(lang_code=LANG)("warm up", voice=VOICE))
+
+
 # espeak-ng is Kokoro's fallback phonemizer for out-of-dictionary words.
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("espeak-ng")
     .pip_install("kokoro>=0.9.2", "soundfile", "numpy", "fastapi[standard]")
+    .run_function(_bake_model)
 )
-
-VOICE = "af_jessica"  # "Jessica" — warm American-English female
-LANG = "a"            # 'a' = American English (matches the af_ voices)
-RATE = 24000          # Kokoro outputs 24 kHz
 
 
 @app.cls(

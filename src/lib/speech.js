@@ -50,6 +50,23 @@ export function cancelSpeech() {
   stopServerAudio()
 }
 
+// Fire-and-forget: wake the Kokoro container when Voice Mode opens, so the
+// first spoken reply comes back warm instead of missing the timeout and
+// falling to the browser voice. Kokoro is CPU-cheap, so this costs nothing
+// meaningful (unlike the old GPU pre-warm). Throttled to once a minute.
+let warmed = 0
+export function warmTTS() {
+  if (!USE_VOXCPM) return
+  const now = Date.now()
+  if (now - warmed < 60000) return
+  warmed = now
+  fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'Hi', language: 'en' }),
+  }).catch(() => {})
+}
+
 // Split into sentence-ish chunks (<=~200 chars). Chrome stops speaking a single
 // long utterance after ~15s, so we queue shorter ones to avoid the cutoff.
 function chunkText(text) {
@@ -111,9 +128,9 @@ async function speakServer(text, opts = {}) {
 
   try {
     const controller = new AbortController()
-    // Cold start can be slow; don't wait in silence — fall back to the browser
-    // voice fast (the GPU/CPU keeps warming, so the next reply uses the server).
-    const timer = setTimeout(() => controller.abort(), 8000)
+    // Give a warming Kokoro container room to answer (cold start ~8s with the
+    // baked model) so the first reply is Jessica, not the browser fallback.
+    const timer = setTimeout(() => controller.abort(), 20000)
     let res
     try {
       res = await fetch('/api/tts', {
