@@ -1,15 +1,18 @@
-// Vercel serverless function: proxies the advisor's chat to Z.ai GLM (primary
-// brain), falling back to Google Gemini only if Z.ai is unavailable. Both keys
-// stay server-side — the browser never sees them.
+// Vercel serverless function: proxies the advisor's chat to GLM-5.2 via NVIDIA
+// (primary brain), falling back to Google Gemini only if NVIDIA is unavailable.
+// Both keys stay server-side — the browser never sees them.
 //
 // The client speaks ONE stream shape (Gemini's candidates[].content.parts[].text),
 // so we translate GLM's OpenAI-style SSE into that shape here — no client change,
 // nothing in the chat/voice pipeline has to know the brain swapped.
 
-const GLM_URL = 'https://api.z.ai/api/paas/v4/chat/completions'
-const GLM_MODELS = ['glm-5.2', 'glm-4.6'] // try newest first; fall back within Z.ai
+// GLM-5.2 via NVIDIA's hosted, OpenAI-compatible LLM API (reliable — this is
+// NVIDIA's inference endpoint, NOT the cold-starting NVCF TTS one). Same
+// nvapi- key you already have.
+const GLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
+const GLM_MODELS = ['z-ai/glm-5.2']
 
-// Gemini fallback models (only used if Z.ai is down / has no key).
+// Gemini fallback models (only used if NVIDIA/GLM is down / has no key).
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash-lite']
 
 export default async function handler(req, res) {
@@ -18,22 +21,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const zaiKey = process.env.ZAI_API_KEY
+  const nvidiaKey = process.env.NVIDIA_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
-  if (!zaiKey && !geminiKey) {
+  if (!nvidiaKey && !geminiKey) {
     return res.status(500).json({ error: 'No AI key is configured on the server.' })
   }
 
   const { system, messages = [], json = false } = req.body || {}
   const chat = messages.filter((m) => m.role === 'user' || m.role === 'assistant')
 
-  // ---------- Primary brain: Z.ai GLM (OpenAI-compatible) ----------
-  if (zaiKey) {
+  // ---------- Primary brain: GLM-5.2 via NVIDIA (OpenAI-compatible) ----------
+  if (nvidiaKey) {
     const oaMessages = []
     if (system) oaMessages.push({ role: 'system', content: system })
     for (const m of chat) oaMessages.push({ role: m.role, content: m.content })
 
-    const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${zaiKey}` }
+    const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${nvidiaKey}` }
 
     try {
       // JSON mode: single non-streaming object (used by "organize into my plan").
@@ -121,7 +124,7 @@ export default async function handler(req, res) {
     }
     // GLM failed for every model. If there's no Gemini backup, surface it.
     if (!geminiKey) {
-      return res.status(502).json({ error: 'GLM (Z.ai) request failed.' })
+      return res.status(502).json({ error: 'GLM (NVIDIA) request failed.' })
     }
     // else: fall through to the Gemini fallback below.
   }
