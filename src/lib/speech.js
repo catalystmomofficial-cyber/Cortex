@@ -27,6 +27,7 @@ export function unlockSpeech() {
 // Bumping the session supersedes/cancels any in-flight chunk queue.
 let speakSession = 0
 let currentSource = null // Web Audio source playing server TTS
+let currentAudio = null // HTMLAudio element playing server TTS
 
 // Use the VoxCPM server voice when enabled; otherwise the free browser voice.
 const USE_VOXCPM =
@@ -41,6 +42,17 @@ function stopServerAudio() {
       /* noop */
     }
     currentSource = null
+  }
+  if (currentAudio) {
+    try {
+      currentAudio.onended = null
+      currentAudio.onerror = null
+      currentAudio.pause()
+      if (currentAudio.src) URL.revokeObjectURL(currentAudio.src)
+    } catch {
+      /* noop */
+    }
+    currentAudio = null
   }
 }
 
@@ -106,12 +118,13 @@ export function speak(text, opts = {}) {
   speakBrowser(text, opts)
 }
 
-// Server TTS via /api/tts (Kokoro/VoxCPM) — plays the returned audio through the
-// shared AudioContext that was unlocked on the user's tap. Web Audio is immune
-// to the autoplay block that rejects a plain <audio>.play() called seconds after
-// the gesture (the reply streams in first). Falls back to the browser voice on
-// ANY failure — slow cold start, non-200, empty/undecodable body, or a context
-// that never resumed — so the advisor is never silent.
+// Server TTS via /api/tts (Kokoro/VoxCPM). Fetch the audio, then try TWO ways to
+// play it before ever falling back to the robot voice:
+//   1. Web Audio (AudioContext) — immune to Safari's autoplay-after-gap block.
+//   2. A plain <audio> element — works on desktop Chrome even when the shared
+//      AudioContext is stuck suspended by the mic pipeline.
+// Only if BOTH fail (or the fetch does) do we use the browser voice. So the
+// advisor is never silent, and real Jessica plays wherever either path works.
 async function speakServer(text, opts = {}) {
   const { lang = 'en-US', onStart, onEnd } = opts
   // Stop anything currently playing WITHOUT bumping the session, then claim it.
@@ -119,59 +132,91 @@ async function speakServer(text, opts = {}) {
   stopServerAudio()
   const mySession = ++speakSession
 
-  let fellBack = false
+  let finished = false
+  const finish = () => {
+    if (finished || mySession !== speakSession) return
+    finished = true
+    onEnd?.()
+  }
   const fallback = () => {
-    if (fellBack || mySession !== speakSession) return
-    fellBack = true
+    if (finished || mySession !== speakSession) return
+    finished = true
     speakBrowser(text, opts)
   }
 
+  let blob
   try {
     const controller = new AbortController()
     // Give a warming Kokoro container room to answer (cold start ~8s with the
     // baked model) so the first reply is Jessica, not the browser fallback.
     const timer = setTimeout(() => controller.abort(), 20000)
-    let res
     try {
-      res = await fetch('/api/tts', {
+      const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, language: lang }),
         signal: controller.signal,
       })
+      if (!res.ok) throw new Error('tts ' + res.status)
+      blob = await res.blob()
     } finally {
       clearTimeout(timer)
     }
-    if (!res.ok) throw new Error('tts ' + res.status)
-    const arr = await res.arrayBuffer()
-    if (mySession !== speakSession) return
-    if (!arr.byteLength) throw new Error('empty audio')
+  } catch {
+    return fallback() // server slow / unavailable
+  }
+  if (mySession !== speakSession) return
+  if (!blob || !blob.size) return fallback()
 
-    const ctx = sharedAudioContext
-    if (!ctx) throw new Error('no audio context')
-    // Resume the context (it was unlocked on the tap). If it still isn't
-    // running, Web Audio would play silently — use the browser voice instead.
-    await resumeAudio()
-    if (mySession !== speakSession) return
-    if (ctx.state !== 'running') throw new Error('audio context suspended')
+  // ---- Attempt 1: Web Audio through the shared (unlocked) context ----
+  const ctx = sharedAudioContext
+  if (ctx) {
+    try {
+      await resumeAudio()
+      if (mySession !== speakSession) return
+      if (ctx.state === 'running') {
+        const buffer = await ctx.decodeAudioData(await blob.arrayBuffer())
+        if (mySession !== speakSession) return
+        const src = ctx.createBufferSource()
+        src.buffer = buffer
+        src.connect(ctx.destination)
+        currentSource = src
+        src.onended = () => {
+          if (currentSource === src) currentSource = null
+          finish()
+        }
+        onStart?.()
+        src.start()
+        return
+      }
+    } catch {
+      /* fall through to the <audio> element */
+    }
+  }
 
-    const buffer = await ctx.decodeAudioData(arr.slice(0))
-    if (mySession !== speakSession) return
-
-    const src = ctx.createBufferSource()
-    src.buffer = buffer
-    src.connect(ctx.destination)
-    currentSource = src
-    src.onended = () => {
-      if (currentSource === src) currentSource = null
-      onEnd?.()
+  // ---- Attempt 2: plain <audio> element ----
+  try {
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    currentAudio = audio
+    audio.onended = () => {
+      if (currentAudio === audio) {
+        URL.revokeObjectURL(url)
+        currentAudio = null
+      }
+      finish()
+    }
+    audio.onerror = () => {
+      if (currentAudio === audio) {
+        URL.revokeObjectURL(url)
+        currentAudio = null
+      }
+      fallback()
     }
     onStart?.()
-    src.start()
+    await audio.play()
   } catch {
-    // Server slow/unavailable, undecodable audio, or a suspended context →
-    // never go silent.
-    fallback()
+    fallback() // autoplay blocked / element failed → robot, never silent
   }
 }
 
