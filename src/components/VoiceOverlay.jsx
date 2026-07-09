@@ -142,7 +142,7 @@ export default function VoiceOverlay({ onClose }) {
     let acc = ''
     try {
       await streamChat({
-        system: buildSystemPrompt(state),
+        system: buildSystemPrompt(state, { voice: true }),
         messages: msgs,
         signal: controller.signal,
         onDelta: (d) => {
