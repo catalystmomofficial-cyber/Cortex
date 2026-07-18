@@ -45,6 +45,19 @@
   --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
 }
 
+/* Animated angle that powers the border beam on every .btn */
+@property --beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -188,6 +201,7 @@ textarea {
 
 /* Buttons ------------------------------------------------------------------ */
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -201,6 +215,55 @@ textarea {
 
 .btn:active {
   transform: scale(0.97);
+}
+
+/* Border beam — a champagne-gold glow that travels around the edge.
+   Pure CSS: a rotating conic gradient masked down to a 1.5px ring. */
+.btn::after,
+.btn-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0deg,
+    var(--gold) 45deg,
+    var(--gold-bright) 75deg,
+    var(--gold) 105deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: beam-spin 3.2s linear infinite;
+  pointer-events: none;
+}
+
+/* Danger buttons carry a red beam so the palette stays coherent. */
+.btn-danger::after {
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0deg,
+    var(--red) 45deg,
+    #f2aca6 75deg,
+    var(--red) 105deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+}
+
+/* Accessibility: hold the beam still for anyone who asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .btn::after,
+  .btn-icon::after {
+    animation: none;
+  }
 }
 
 .btn-primary {
@@ -226,6 +289,7 @@ textarea {
 }
 
 .btn-icon {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 50%;
